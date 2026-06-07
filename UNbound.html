@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UNbound — Leadership Unbound by Borders</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #FFFFFF;
+      --bg-elev:      #f4f8fb;
+      --bg-card:      #eef4f8;
+      --ink:          #003249;
+      --ink-mid:      #2a5068;
+      --ink-dim:      #82898F;
+      --ink-faint:    #c0c8cc;
+      --accent:       #00B4D8;
+      --accent-light: #90E0EF;
+      --accent-soft:  rgba(0,180,216,0.09);
+      --dark:         #003249;
+      --border:       #dde7ed;
+      --display:      'Montserrat', 'Times New Roman', serif;
+      --sans:         'Montserrat', system-ui, sans-serif;
+      --mono:         'IBM Plex Mono', ui-monospace, monospace;
+      --nav-h:        92px;
+      --marquee-h:    48px;
+    }
+
+    html { scroll-behavior: smooth; }
+    #mission, #chapters, #story, #sdg, #speakers, #join { scroll-margin-top: var(--nav-h); }
+    html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+    body { overflow-x: hidden; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+    ul { list-style: none; }
+
+    /* ---- NAV ---- */
+    nav.top {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 48px;
+      background: rgba(228,242,252,0.94); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    nav.top .brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--sans); font-size: 26px; letter-spacing: -0.01em;
+      color: #0264A7; font-weight: 700; line-height: 1;
+    }
+    nav.top .brand img { height: 52px; width: auto; object-fit: contain; }
+    nav.top ul { display: flex; align-items: center; gap: 36px; }
+    nav.top ul a {
+      font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--ink-dim); transition: color .2s; font-weight: 600;
+    }
+    nav.top ul a:hover { color: var(--accent); }
+    nav.top .menu-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border: 1.5px solid var(--accent); border-radius: 999px;
+      font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent); font-weight: 600;
+    }
+
+    /* ---- HERO ---- */
+    .hero {
+      display: grid; grid-template-columns: 1fr 1fr;
+      height: calc(100vh - var(--marquee-h));
+      padding: var(--nav-h) 0 0; overflow: hidden;
+    }
+    .hero-left {
+      display: flex; flex-direction: column; justify-content: center;
+      padding: clamp(24px, 4vh, 56px) clamp(28px, 4vw, 48px);
+      position: relative; background: var(--bg); min-width: 0;
+    }
+    .hero-left::after {
+      content: ""; position: absolute; right: 0; top: 15%; bottom: 15%;
+      width: 1px;
+      background: linear-gradient(to bottom, transparent, var(--border) 30%, var(--border) 70%, transparent);
+    }
+    .hero-left .eyebrow {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 24px;
+      display: flex; align-items: center; gap: 12px; font-weight: 600;
+    }
+    .hero-left .eyebrow::before {
+      content: ""; display: block; width: 32px; height: 1.5px; background: var(--accent);
+    }
+    .hero-left h1 {
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(48px, 6.6vw, 108px); line-height: 1.0;
+      letter-spacing: -0.02em; color: var(--dark); margin-bottom: 34px;
+    }
+    @media (max-height: 760px) and (min-width: 901px) {
+      .hero-left h1 { font-size: clamp(42px, 5.4vw, 72px); margin-bottom: 20px; }
+      .hero-left .eyebrow { margin-bottom: 14px; }
+      .sub-text { margin-bottom: 26px; font-size: 16px; }
+    }
+
+    @keyframes unboundSweep {
+      0%, 15%  { background-position: 100% center; }
+      45%, 55% { background-position: 0% center; }
+      85%, 100%{ background-position: 100% center; }
+    }
+    @keyframes starPop {
+      0%, 31%   { opacity: 0; transform: scale(0) rotate(0deg); }
+      36%       { opacity: 1; transform: scale(1.15) rotate(15deg); }
+      42%       { opacity: 0; transform: scale(0.8) rotate(30deg); }
+      58%       { opacity: 0; transform: scale(0) rotate(-30deg); }
+      64%       { opacity: 1; transform: scale(1.15) rotate(-15deg); }
+      70%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+    }
+
+    .hero-left h1 em {
+      font-style: italic; font-weight: 600;
+      position: relative; display: inline-block; padding-right: 0.12em;
+      background: linear-gradient(90deg,
+        var(--accent) 0%, var(--accent) 30%,
+        #8ef0dc 46%, #c2faef 50%, #8ef0dc 54%,
+        var(--accent) 70%, var(--accent) 100%
+      );
+      background-size: 300% 100%;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: unboundSweep 8s ease-in-out infinite;
+    }
+    .star-sparkle {
+      position: absolute; top: -0.18em; right: -0.05em;
+      font-size: 0.38em; line-height: 1;
+      -webkit-text-fill-color: #a8f0ff; color: #a8f0ff;
+      text-shadow: 0 0 8px #a8f0ff, 0 0 18px rgba(168,240,255,0.6);
+      animation: starPop 8s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    .sub-text {
+      font-size: 19px; line-height: 1.65; color: var(--ink-dim);
+      max-width: 40ch; margin-bottom: 48px; font-weight: 400;
+    }
+    .stats-row { display: flex; gap: 36px; margin-bottom: 44px; }
+    .stat .n {
+      font-family: var(--display); font-size: 40px; color: var(--dark);
+      line-height: 1; font-weight: 600;
+    }
+    .stat .l {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--ink-dim); margin-top: 4px; font-weight: 500;
+    }
+    .cta-row { display: flex; gap: 12px; align-items: center; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 13px 22px; border: 1.5px solid var(--border); border-radius: 999px;
+      font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--ink-mid); font-weight: 600; transition: all .22s; cursor: pointer;
+    }
+    .pill:hover { border-color: var(--accent); color: var(--accent); transform: scale(1.05); }
+    .pill.solid { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .pill.solid:hover { background: #009bbf; border-color: #009bbf; }
+    .pill .arrow { display: inline-block; transform: rotate(-45deg); }
+
+    /* ---- HERO RIGHT / GLOBE ---- */
+    .hero-right {
+      position: relative; overflow: hidden;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .globe-container {
+      position: relative; z-index: 1;
+      width: min(86vh, 620px); height: min(86vh, 620px);
+    }
+    #globe-el { width: 100%; height: 100%; }
+
+    /* Info card overlay */
+    .info-card {
+      position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
+      z-index: 30; width: 360px; max-width: calc(100vw - 3rem);
+      pointer-events: none;
+      opacity: 0; transform: translateY(-50%) translateX(20px) scale(0.95);
+      transition: opacity 0.25s, transform 0.25s;
+    }
+    .info-card.visible { pointer-events: auto; }
+    .info-card.visible {
+      opacity: 1; transform: translateY(-50%) translateX(0) scale(1);
+    }
+    .info-card-inner {
+      position: relative; overflow: hidden; border-radius: 24px;
+      background: rgba(0,50,73,0.4); backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3); color: #fff;
+    }
+    .info-card-bar {
+      position: absolute; top: 0; left: 0; right: 0; height: 6px; opacity: 0.8;
+    }
+    .info-card-close {
+      position: absolute; right: 20px; top: 20px;
+      border-radius: 50%; padding: 8px;
+      color: rgba(255,255,255,0.5); transition: background .2s, color .2s;
+    }
+    .info-card-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .info-card-close svg { width: 16px; height: 16px; display: block; }
+    .info-card-eyebrow {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.15em;
+      text-transform: uppercase; margin-bottom: 12px; margin-top: 8px;
+    }
+    .info-card-eyebrow svg { width: 14px; height: 14px; }
+    .info-card h2 { font-size: 28px; font-weight: 300; line-height: 1.2; margin-bottom: 16px; padding-right: 32px; }
+    .info-card p { font-size: 14px; color: rgba(255,255,255,0.7); line-height: 1.7; margin-bottom: 28px; font-weight: 300; }
+    .info-stat-row {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .info-stat {
+      display: flex; align-items: center; gap: 16px;
+      border-radius: 16px; background: rgba(255,255,255,0.05);
+      padding: 16px; border: 1px solid rgba(255,255,255,0.05);
+    }
+    .info-stat-icon {
+      flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .info-stat-icon svg { width: 20px; height: 20px; color: #fff; }
+    .info-stat-label { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.5); font-weight: 500; margin-bottom: 4px; }
+    .info-stat-value { font-size: 18px; font-weight: 300; color: #fff; }
+    .info-coords { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .info-coord {
+      border-radius: 16px; background: rgba(255,255,255,0.05);
+      padding: 16px; border: 1px solid rgba(255,255,255,0.05);
+    }
+    .info-coord-label { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.5); font-weight: 500; margin-bottom: 4px; }
+    .info-coord-val { font-family: var(--mono); font-size: 13px; color: rgba(255,255,255,0.8); }
+
+    /* ---- MARQUEE ---- */
+    .marquee-strip {
+      overflow: hidden; background: #004466;
+      height: var(--marquee-h); display: flex; align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .marquee-track {
+      display: flex; width: max-content;
+      animation: marqueeScroll 24s linear infinite;
+    }
+    .marquee-track:hover { animation-play-state: paused; }
+    .marquee-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 44px; font-family: var(--mono); font-size: 12px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: rgba(255,255,255,0.72); white-space: nowrap; font-weight: 500;
+    }
+    .marquee-item .flag { font-size: 20px; line-height: 1; }
+    .marquee-sep { color: var(--accent); opacity: 0.35; padding: 0 8px; }
+    @keyframes marqueeScroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ---- SECTIONS ---- */
+    section { padding: clamp(72px, 9vh, 120px) clamp(24px, 5vw, 48px); position: relative; }
+    .sec-head { display: grid; grid-template-columns: 1fr 3fr; gap: 40px; margin-bottom: 60px; }
+    .sec-head .label {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em;
+      text-transform: uppercase; color: var(--ink-dim); padding-top: 12px; font-weight: 500;
+    }
+    .sec-head h2 {
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(40px, 4.5vw, 72px); line-height: 1.02;
+      letter-spacing: -0.02em; max-width: 22ch; color: var(--dark);
+    }
+    .sec-head h2 em { font-style: italic; color: var(--accent); font-weight: 600; }
+
+    /* mission */
+    .mission { border-top: 1px solid var(--border); }
+    .mission-center { max-width: 980px; margin: 0 auto; text-align: center; }
+    .mission-center .label {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em;
+      text-transform: uppercase; color: var(--ink-dim); margin-bottom: 24px; font-weight: 500;
+    }
+    .mission-center h2 {
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(40px, 4.6vw, 72px); line-height: 1.04;
+      letter-spacing: -0.02em; color: var(--dark); margin-bottom: 36px;
+    }
+    .mission-center h2 em { font-style: italic; color: var(--accent); font-weight: 600; }
+    .mission-text { max-width: 720px; margin: 0 auto; }
+    .mission-text p { font-size: 16px; line-height: 1.75; color: var(--ink-mid); font-weight: 400; }
+    .mission-text p + p { margin-top: 20px; }
+    .mission-stats {
+      margin-top: 72px; display: grid; grid-template-columns: repeat(5, 1fr);
+    }
+    .mstat {
+      padding: 40px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+      border-left: 1px solid var(--border);
+    }
+    .mstat:first-child { border-left: none; }
+    .mstat-n {
+      font-family: var(--display); font-weight: 600; font-size: clamp(40px, 4vw, 58px);
+      line-height: 1; letter-spacing: -0.02em; color: var(--accent);
+    }
+    .mstat-l {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--ink-dim); font-weight: 500; line-height: 1.5; max-width: 16ch;
+    }
+
+    /* chapters */
+    .chapters { border-top: 1px solid var(--border); background: linear-gradient(to bottom, #c8eefb 0%, #5cd8c4 100%); }
+    .ch-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+      padding: 36px; min-height: 340px; display: flex; flex-direction: column;
+      justify-content: space-between;
+      transition: border-color .25s, box-shadow .25s;
+    }
+    .card:hover { border-color: var(--accent-light); box-shadow: 0 4px 24px rgba(0,180,216,0.08); }
+    .card .top-row { display: flex; justify-content: space-between; align-items: flex-start; }
+    .card h3 { font-family: var(--display); font-weight: 600; font-size: 34px; line-height: 1; letter-spacing: -0.02em; color: var(--dark); }
+    .card .num { font-family: var(--display); font-weight: 400; font-size: 34px; color: var(--ink-faint); }
+    .card .meta { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); margin-top: 8px; font-weight: 500; }
+    .card p { font-size: 13.5px; line-height: 1.65; color: var(--ink-dim); margin-top: 16px; max-width: 42ch; font-weight: 500; }
+    .card .bot-row { display: flex; justify-content: space-between; align-items: center; margin-top: 28px; }
+    .card .year { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); font-weight: 500; }
+    .card.image {
+      padding: 0; background: var(--bg-card); position: relative;
+      min-height: 340px; border-radius: 12px; overflow: hidden;
+    }
+    .card.image .ph {
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(135deg, #edf3f7 0 8px, #e8f0f5 8px 16px);
+      display: grid; place-items: center;
+      color: var(--ink-faint); font-family: var(--mono);
+      font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;
+    }
+    .card.image .dots {
+      position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 5px;
+    }
+    .card.image .dots span { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-faint); }
+    .card.image .dots span.on { background: var(--accent); }
+    .ctag {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--accent);
+      border: 1px solid var(--accent-soft); background: var(--accent-soft);
+      padding: 3px 10px; border-radius: 999px; display: inline-block;
+      margin-bottom: 16px; font-weight: 600;
+    }
+
+    /* story */
+    .story { border-top: 1px solid var(--border); padding: 160px 48px; }
+    .story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: start; }
+    .story-visual {
+      aspect-ratio: 16/9; background: #000; border-radius: 8px;
+      overflow: hidden; border: 1px solid var(--border); position: relative;
+    }
+    .story-visual iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+    .story-grid .quote-callout { grid-column: 1 / -1; margin-top: 8px; }
+    .story-visual .sph {
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(45deg, #edf3f7 0 10px, #e8eff4 10px 20px);
+      display: grid; place-items: center;
+    }
+    .story-visual .sph span {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+    }
+    .story-visual .badge {
+      position: absolute; top: 18px; left: 18px;
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--dark);
+      background: rgba(255,255,255,0.85); padding: 5px 12px; border-radius: 999px; font-weight: 600;
+    }
+    .story-visual .caption {
+      position: absolute; bottom: 18px; left: 18px; right: 18px;
+      font-family: var(--display); font-style: italic; font-size: 16px;
+      color: var(--dark); font-weight: 600;
+    }
+    .story .sec-label {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em;
+      text-transform: uppercase; color: var(--ink-dim); margin-bottom: 24px;
+      display: block; font-weight: 500;
+    }
+    .story-body p { font-size: 15px; line-height: 1.75; margin-bottom: 18px; color: var(--ink-mid); max-width: 52ch; font-weight: 400; }
+    .quote-callout {
+      margin-top: 44px; padding: 26px 28px;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-soft); border-radius: 0 6px 6px 0;
+    }
+    .quote-callout p {
+      font-family: var(--display); font-style: italic; font-size: 20px;
+      line-height: 1.45; color: var(--dark); font-weight: 600;
+    }
+    .quote-callout .attr {
+      margin-top: 12px; font-family: var(--mono); font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); font-weight: 500;
+    }
+
+    /* impact framework */
+    .sdg { border-top: 1px solid var(--border); background: var(--dark); }
+    .impact-head { max-width: 920px; margin: 0 auto 64px; text-align: center; }
+    .impact-head .label {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em;
+      text-transform: uppercase; color: var(--accent-light); margin-bottom: 22px; font-weight: 500;
+    }
+    .impact-head h2 {
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(36px, 4.2vw, 64px); line-height: 1.05;
+      letter-spacing: -0.02em; color: #fff; margin-bottom: 28px;
+    }
+    .impact-head h2 em { font-style: italic; color: var(--accent); font-weight: 600; }
+    .impact-head p { font-size: 17px; line-height: 1.7; color: rgba(255,255,255,0.72); max-width: 720px; margin: 0 auto; font-weight: 400; }
+    .impact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 1240px; margin: 0 auto; }
+    .impact-card {
+      background: #fff; border-radius: 16px; padding: 36px;
+      display: flex; flex-direction: column; align-items: center; gap: 24px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+    .impact-card img { width: 100%; height: auto; display: block; }
+    .impact-card figcaption {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--ink-dim); font-weight: 600;
+    }
+
+    /* speakers */
+    .speakers { border-top: 1px solid var(--border); }
+    .speakers-intro {
+      max-width: 760px; font-size: 16px; line-height: 1.75; color: var(--ink-mid);
+      margin: -24px 0 56px calc(25% + 20px); font-weight: 400;
+    }
+    .speakers-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .speaker-card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+      overflow: hidden; display: flex; flex-direction: column;
+      transition: border-color .25s, box-shadow .25s;
+    }
+    .speaker-card:hover { border-color: var(--accent-light); box-shadow: 0 4px 24px rgba(0,180,216,0.08); }
+    .speaker-photo {
+      aspect-ratio: 4/3; position: relative;
+      background: repeating-linear-gradient(135deg, #edf3f7 0 8px, #e8f0f5 8px 16px);
+      display: grid; place-items: center;
+    }
+    .speaker-photo span {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+    }
+    .speaker-body { padding: 28px; }
+    .speaker-body h3 {
+      font-family: var(--display); font-weight: 600; font-size: 24px;
+      letter-spacing: -0.01em; color: var(--dark); line-height: 1.1;
+    }
+    .speaker-role {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--accent); margin-top: 8px; font-weight: 600;
+    }
+    .speaker-body p { font-size: 14px; line-height: 1.65; color: var(--ink-dim); margin-top: 16px; font-weight: 400; }
+
+    /* CONTACT */
+    .contact {
+      border-top: 1px solid var(--border);
+      background: linear-gradient(160deg, #00B4D8 0%, #0096b8 55%, #5cd8c4 100%);
+      color: #fff; position: relative; overflow: hidden;
+    }
+    .contact-head { text-align: center; max-width: 760px; margin: 0 auto 60px; }
+    .contact-head h2 {
+      font-family: var(--display); font-weight: 600;
+      font-size: clamp(44px, 5.5vw, 88px); line-height: 0.98;
+      letter-spacing: -0.025em; color: #fff;
+    }
+    .contact-head h2 em { font-style: italic; font-weight: 600; color: #eafcff; }
+    .contact-head p { margin: 28px auto 0; max-width: 46ch; color: rgba(255,255,255,0.92); line-height: 1.6; font-size: 17px; font-weight: 400; }
+    .contact-head .contact-sub { margin-top: 14px; color: rgba(255,255,255,0.78); font-size: 15px; }
+
+    .audience-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 1100px; margin: 0 auto 40px; }
+    .audience-card {
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 18px; padding: 38px 28px; text-align: center;
+      backdrop-filter: blur(8px); transition: background .25s, transform .25s;
+    }
+    .audience-card:hover { background: rgba(255,255,255,0.18); transform: translateY(-3px); }
+    .audience-icon {
+      width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 22px;
+      background: rgba(255,255,255,0.18); display: grid; place-items: center;
+    }
+    .audience-icon svg { width: 26px; height: 26px; color: #fff; }
+    .audience-card h3 { font-family: var(--display); font-weight: 600; font-size: 24px; color: #fff; margin-bottom: 12px; letter-spacing: -0.01em; }
+    .audience-card p { font-size: 15px; line-height: 1.55; color: rgba(255,255,255,0.85); font-weight: 400; max-width: 24ch; margin: 0 auto; }
+
+    .contact-body { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; max-width: 1100px; margin: 0 auto; align-items: start; }
+    .contact-form {
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 20px; padding: 40px; backdrop-filter: blur(8px);
+      display: flex; flex-direction: column; gap: 20px;
+    }
+    .contact-form h3 { font-family: var(--display); font-weight: 600; font-size: 30px; color: #fff; text-align: center; margin-bottom: 6px; }
+    .contact-form label {
+      display: flex; flex-direction: column; gap: 9px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: rgba(255,255,255,0.9); font-weight: 500;
+    }
+    .contact-form input, .contact-form textarea {
+      font-family: var(--sans); font-size: 15px; color: #fff;
+      background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 10px; padding: 14px 16px; outline: none;
+      transition: border-color .2s, background .2s; resize: vertical;
+    }
+    .contact-form input::placeholder, .contact-form textarea::placeholder { color: rgba(255,255,255,0.6); text-transform: none; letter-spacing: 0; font-family: var(--sans); }
+    .contact-form input:focus, .contact-form textarea:focus { border-color: #fff; background: rgba(255,255,255,0.2); }
+    .contact-send {
+      margin-top: 6px; padding: 16px; border-radius: 10px;
+      background: #003249; color: #fff; font-family: var(--sans);
+      font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+      transition: background .2s, transform .15s;
+    }
+    .contact-send:hover { background: #00243a; transform: scale(1.05); }
+
+    .contact-side { display: flex; flex-direction: column; gap: 24px; }
+    .contact-info {
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 20px; padding: 32px; backdrop-filter: blur(8px);
+    }
+    .contact-info-head {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--display); font-weight: 600; font-size: 19px; color: #fff; margin-bottom: 18px;
+    }
+    .contact-info-head svg { width: 20px; height: 20px; }
+    .contact-info a { display: block; font-size: 15px; color: rgba(255,255,255,0.92); line-height: 1.8; transition: color .2s; }
+    .contact-info a:hover { color: #fff; text-decoration: underline; }
+    .contact-info a span { color: rgba(255,255,255,0.65); font-size: 13px; }
+    .contact-info p { font-size: 15px; line-height: 1.6; color: rgba(255,255,255,0.88); font-weight: 400; }
+
+    /* footer */
+    footer { border-top: 1px solid var(--border); padding: 56px 48px 36px; background: var(--bg); }
+    footer .foot-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 56px; margin-bottom: 56px; }
+    footer .brand-col .brand {
+      font-family: var(--display); font-size: 40px; letter-spacing: -0.02em;
+      line-height: 1; margin-bottom: 16px; color: var(--dark); font-weight: 700;
+    }
+    footer .brand-col p { color: var(--ink-dim); font-size: 14px; line-height: 1.65; max-width: 34ch; font-weight: 500; }
+    footer h4 {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+      text-transform: uppercase; color: var(--ink-dim); margin-bottom: 16px; font-weight: 600;
+    }
+    footer ul { display: flex; flex-direction: column; gap: 10px; }
+    footer ul a { font-size: 13.5px; color: var(--ink-mid); transition: color .2s; font-weight: 500; }
+    footer ul a:hover { color: var(--accent); }
+    footer .bot {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-top: 28px; border-top: 1px solid var(--border);
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--ink-faint); font-weight: 500;
+    }
+
+    /* responsive */
+    @media (max-width: 1120px) {
+      nav.top { padding: 18px 18px; }
+      nav.top .brand { font-size: 22px; }
+      nav.top .brand img { height: 44px; }
+      nav.top ul { gap: 12px; }
+      nav.top ul a { font-size: 13px !important; }
+    }
+    @media (max-width: 900px) {
+      nav.top { padding: 16px 24px; }
+      nav.top ul { display: none; }
+      .hero { grid-template-columns: 1fr; height: auto; min-height: auto; overflow: visible; }
+      .hero-left { padding: 40px 24px 60px; text-align: center; align-items: center; }
+      .hero-left .eyebrow { justify-content: center; }
+      .hero-left .sub-text { margin-left: auto; margin-right: auto; }
+      .stats-row { justify-content: center; flex-wrap: wrap; gap: 24px; }
+      .cta-row { flex-direction: column; width: 100%; max-width: 300px; margin: 0 auto; align-items: stretch; }
+      .cta-row .pill { justify-content: center; }
+      .hero-right { height: 70vh; min-height: 500px; width: 100%; }
+      .globe-container { width: 100%; height: 100%; }
+      .hero-left::after { display: none; }
+      section { padding: 80px 24px; }
+      .sec-head, .story-grid, .ch-grid, .impact-grid, footer .foot-grid { grid-template-columns: 1fr; gap: 36px; }
+      .mission-stats { grid-template-columns: 1fr 1fr; }
+      .mstat { border-left: 1px solid var(--border); }
+      .mstat:nth-child(odd) { border-left: none; }
+      .speakers-grid { grid-template-columns: 1fr; gap: 20px; }
+      .speakers-intro { margin-left: 0; margin-top: 0; }
+      .audience-grid { grid-template-columns: 1fr; }
+      .contact-body { grid-template-columns: 1fr; }
+      .contact-form { padding: 28px; }
+      footer { padding: 48px 24px 24px; }
+      .card { padding: 24px; min-height: auto; }
+      .sdg-cell { padding: 24px; min-height: auto; }
+      .card.image { min-height: 240px; }
+      .info-card { right: 12px; top: 12px; transform: none; width: calc(100vw - 24px); }
+      .info-card.visible { transform: none; }
+      .cta .cta-row { flex-direction: column; align-items: center; }
+      .card.globe-card { min-height: 320px; }
+    }
+
+    /* === nav join button + fellow login === */
+    nav.top ul a.nav-join {
+      display: inline-block; background: var(--accent); color: #fff; padding: 8px 18px; border-radius: 999px;
+      transition: background .2s, transform .2s; transform-origin: center;
+    }
+    nav.top ul a.nav-join:hover { color: #fff; }
+    nav.top ul a.nav-join:hover { background: #009bbf; color: #fff; transform: scale(1.05); }
+    nav.top .menu-pill { transition: background .2s, color .2s, transform .2s; cursor: pointer; }
+    nav.top .menu-pill:hover { background: var(--accent); color: #fff; transform: scale(1.05); }
+
+    /* === globe relocated into Chapters === */
+    .card.globe-card {
+      padding: 0; position: relative; overflow: hidden; border-radius: 12px;
+      background-color: #0a1f4d;
+      background-image: url('stars-unbound.png');
+      background-size: cover; background-position: center;
+      background-repeat: no-repeat;
+      min-height: 480px; border: 1px solid #0a1f4d;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .globe-card .globe-container {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+    }
+    /* hint chip in the corner of the globe */
+    .globe-hint {
+      position: absolute; left: 16px; bottom: 16px; z-index: 20;
+      max-width: none; pointer-events: none;
+      display: flex; align-items: center; gap: 11px;
+      padding: 12px 16px; border-radius: 14px;
+      background: rgba(0,40,73,0.55); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.16);
+      font-family: var(--mono); font-size: 14px; line-height: 1.4;
+      letter-spacing: 0.01em; color: rgba(255,255,255,0.95); font-weight: 500;
+    }
+    .globe-hint span { white-space: nowrap; }
+    .globe-hint svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--accent-light); }
+
+    /* === project popup (replaces The Fellowship card) === */
+    .project-card { display: none; }
+    .project-card.show { display: flex; position: absolute; inset: 0; z-index: 4; }
+    .project-card {
+      flex-direction: column; padding: 0; overflow: hidden;
+      background: #07294a; border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 8px 32px rgba(0,40,73,0.28); position: relative; color: #fff;
+    }
+    .project-bar { height: 6px; width: 100%; opacity: 0.9; flex-shrink: 0; }
+    .project-close {
+      position: absolute; right: 16px; top: 16px; z-index: 5;
+      width: 34px; height: 34px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85);
+      transition: background .2s, color .2s, transform .2s;
+    }
+    .project-close:hover { background: rgba(255,255,255,0.22); color: #fff; transform: scale(1.08); }
+    .project-close svg { width: 16px; height: 16px; }
+    .project-top { display: flex; flex-direction: column; gap: 5px; padding: 24px 28px 14px; flex-shrink: 0; }
+    .project-year {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--accent-light); font-weight: 600; margin-bottom: 2px;
+    }
+    .project-name { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.92); }
+    .project-title {
+      font-family: var(--display); font-weight: 500; font-size: 26px; line-height: 1.12;
+      letter-spacing: -0.01em; color: #fff; margin: 2px 0 4px;
+    }
+    .project-loc {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12.5px; color: rgba(255,255,255,0.6); font-weight: 500;
+    }
+    .project-loc svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .project-img {
+      margin: 0 28px; width: calc(100% - 56px); flex: 1 1 0; min-height: 0;
+      border-radius: 12px; overflow: hidden; position: relative;
+      background: repeating-linear-gradient(135deg, rgba(255,255,255,0.10) 0 9px, rgba(255,255,255,0.04) 9px 18px);
+      border: 1px solid rgba(255,255,255,0.12);
+      display: grid; place-items: center; text-align: center;
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: rgba(255,255,255,0.45); font-weight: 600;
+    }
+    .project-desc {
+      padding: 16px 28px 24px; font-size: 14px; line-height: 1.55; flex-shrink: 0;
+      color: rgba(255,255,255,0.78); font-weight: 400;
+      display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .project-sdgs {
+      position: absolute; top: 12px; right: 12px; z-index: 3;
+      display: flex; gap: 6px; align-items: center;
+      padding: 6px 8px; border-radius: 11px;
+      background: rgba(3,20,37,0.5); backdrop-filter: blur(7px);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .sdg-sq {
+      width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;
+      display: grid; place-items: center; color: #fff;
+      font-family: var(--mono); font-weight: 700; font-size: 12px;
+    }
+    .ch-col2 { display: flex; flex-direction: column; min-width: 0; position: relative; }
+    .ch-col2 > .card { flex: 1; }
+    .fellowship-card.hidden { visibility: hidden; }
+
+    /* === hero image carousel === */
+    .hero-carousel { position: absolute; inset: 0; overflow: hidden; }
+    .hc-track { display: flex; height: 100%; transition: transform .7s cubic-bezier(.65,0,.35,1); }
+    .hc-slide { min-width: 100%; height: 100%; }
+    .hc-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .hc-arrow {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 5;
+      width: 46px; height: 46px; border-radius: 50%;
+      background: rgba(0,50,73,0.35); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.28); color: #fff; font-size: 24px; line-height: 1;
+      display: grid; place-items: center; transition: background .2s, transform .2s;
+    }
+    .hc-arrow:hover { background: var(--accent); transform: translateY(-50%) scale(1.1); }
+    .hc-arrow.prev { left: 18px; }
+    .hc-arrow.next { right: 18px; }
+    .hc-dots { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 5; }
+    .hc-dots button { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.55); transition: all .25s; }
+    .hc-dots button.on { background: var(--accent); width: 22px; border-radius: 4px; }
+
+    /* === impact reveal animations === */
+    .impact-head .reveal-up { opacity: 0; transform: translateY(34px); transition: opacity .9s ease, transform .9s ease; }
+    .impact-head.in .reveal-up { opacity: 1; transform: none; }
+    .impact-head.in .reveal-up.delay { transition-delay: 0.5s; }
+    .impact-card { opacity: 0; transition: opacity 1s ease; }
+    .impact-card.in { opacity: 1; }
+    .impact-card.sdg-figure { justify-content: center; }
+
+    /* === speaker scroll wipe === */
+    .speaker-card { --d: 0s; }
+    .speakers-grid .speaker-card:nth-child(2) { --d: .2s; }
+    .speakers-grid .speaker-card:nth-child(3) { --d: .4s; }
+    .speaker-photo { position: relative; }
+    .speaker-photo img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      clip-path: inset(0 100% 0 0); transition: clip-path 1s ease; transition-delay: var(--d);
+    }
+    .speaker-card.in .speaker-photo img { clip-path: inset(0 0 0 0); }
+    .speaker-body h3, .speaker-body .speaker-role, .speaker-body p {
+      opacity: 0; transition: opacity 1s ease; transition-delay: var(--d);
+    }
+    .speaker-card.in .speaker-body h3,
+    .speaker-card.in .speaker-body .speaker-role,
+    .speaker-card.in .speaker-body p { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="top">
+  <div class="brand">
+    <img src="logo.png" alt="UNbound Logo" onerror="this.style.display='none'" />
+    UNbound
+  </div>
+  <ul>
+    <li><a href="#mission" style="font-size: 14px">Mission</a></li>
+    <li><a href="#chapters" style="font-size: 14px">Chapters</a></li>
+    <li><a href="#story" style="font-size: 14px">Story</a></li>
+    <li><a href="#sdg" style="font-size: 14px">Pedagogies</a></li>
+    <li><a href="#speakers" style="font-size: 14px">Speakers</a></li>
+    <li><a href="#join" class="nav-join" style="font-size: 14px">Join</a></li>
+  </ul>
+  <a href="fellow-login.html" class="menu-pill" style="font-size: 14px">Fellow Login</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-left" style="padding: 60px 48px">
+    <div class="eyebrow" style="font-size: 13px">A Global Student Network</div>
+    <h1>Leadership<br/><em>unbound<span class="star-sparkle">✦</span></em><br/>by borders.</h1>
+    <p class="sub-text">Young people will change the world. UNbound ensures we do it for the better.</p>
+    <div class="cta-row">
+      <a href="#mission" class="pill" style="font-size: 13px">Explore the Initiative</a>
+      <a href="#join" class="pill solid" style="font-size: 13px; margin: 0px">Join UNbound <span class="arrow">→</span></a>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <div class="hero-carousel">
+      <div class="hc-track" id="hc-track">
+        <div class="hc-slide"><img src="img/1.jpeg" alt="Miles for Smiles charity race" /></div>
+        <div class="hc-slide"><img src="img/2.png" alt="Classroom workshop in session" style="object-position: 100% center;" /></div>
+        <div class="hc-slide"><img src="img/3.png" alt="Infant treated by Operation Smile" /></div>
+        <div class="hc-slide"><img src="img/4.png" alt="Operation Smile surgical team" /></div>
+        <div class="hc-slide"><img src="img/5.jpg" alt="Families at an Operation Smile event" /></div>
+        <div class="hc-slide"><img src="img/6.png" alt="Students writing in class" /></div>
+      </div>
+      <button class="hc-arrow prev" id="hc-prev" aria-label="Previous image">‹</button>
+      <button class="hc-arrow next" id="hc-next" aria-label="Next image">›</button>
+      <div class="hc-dots" id="hc-dots"></div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee-strip" aria-hidden="true">
+  <div class="marquee-track">
+    <div class="marquee-item"><span class="flag">🇯🇵</span> Japan</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇰🇷</span> Korea</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇫🇷</span> France</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇲🇽</span> Mexico</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇺🇸</span> United States</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇨🇴</span> Colombia</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇯🇵</span> Japan</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇰🇷</span> Korea</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇫🇷</span> France</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇲🇽</span> Mexico</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇺🇸</span> United States</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><span class="flag">🇨🇴</span> Colombia</div><span class="marquee-sep">·</span>
+  </div>
+</div>
+
+<!-- MISSION -->
+<section class="mission" id="mission">
+  <div class="mission-center">
+    <div class="label" style="font-size: 13px">/ 01 — MISSION</div>
+    <h2>A Leader in Youth-Led<br/><em>Global Impact</em></h2>
+    <div class="mission-text">
+      <p>UNbound is a virtual student-led leadership network connecting English-speaking schools around the world. We equip students with the tools, guidance, and a global lens to lead community-based service initiatives—sparking lasting impact that begins in schools and ripples outward.</p>
+      <p>We challenge the traditional, silo-centric "club" model by cultivating multi-stakeholder, SDG-aligned action plans that elevate student agency and transform extracurricular learning into something far more ambitious.</p>
+    </div>
+    <div class="mission-stats" id="mission-stats">
+      <div class="mstat"><div class="mstat-n" data-count="8">0</div><div class="mstat-l" style="font-size: 13px">Partner Institutions</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="24">0</div><div class="mstat-l" style="font-size: 13px">Fellows &amp; Alumni</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="6">0</div><div class="mstat-l" style="font-size: 13px">Countries Represented</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="560">0</div><div class="mstat-l" style="font-size: 13px">People Served</div></div>
+      <div class="mstat"><div class="mstat-n">$0</div><div class="mstat-l" style="font-size: 13px">Cost for Every Fellow, Always</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTERS -->
+<section class="chapters" id="chapters">
+  <div class="sec-head">
+    <div class="label" style="font-size: 13px">/ 02 — CHAPTERS</div>
+    <h2 style="font-size: 60px">What we've built:<br/><em>A Launchpad for Change</em></h2>
+  </div>
+  <div class="ch-grid">
+
+    <div class="card globe-card">
+      <div class="globe-container">
+        <div id="globe-el"></div>
+      </div>
+      <div class="globe-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+        <span>Click location pins to<br/>explore Fellow Projects</span>
+      </div>
+    </div>
+    <div class="ch-col2">
+      <div class="card fellowship-card" id="fellowship-card">
+        <div>
+          <span class="ctag" style="font-size: 13px">GLOBAL GOALS. LOCAL IMPACT. YOUTH IN ACTION</span>
+          <div class="top-row"><h3 style="font-size: 50px; margin: 9px 0px 8px">The Fellowship</h3><div class="num" style="width: 0px; height: 0px">
+</div></div>
+          <div class="meta" style="font-size: 13px; margin: 1px 0px 0px">FOR STUDENTS, BY STUDENTS</div>
+          <p style="font-size: 16px">We believe our generation will change the world for the better. Through our free, 7-month virtual Fellowship, students build real community impact projects—developing the leadership, confidence, and global perspective to keep making this vision a reality long after the program ends.</p>
+        </div>
+        <div class="bot-row"><a href="#" class="pill" style="font-size: 13px">JOIN THE FELLOWSHIP →</a><span class="year">2026-2027</span></div>
+      </div>
+      <div class="card project-card" id="project-card">
+        <div class="project-bar" id="proj-bar"></div>
+        <button class="project-close" id="proj-close" aria-label="Close project">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div class="project-top">
+          <div class="project-year" id="proj-year"></div>
+          <div class="project-name" id="proj-name"></div>
+          <div class="project-title" id="proj-title"></div>
+          <div class="project-loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg><span id="proj-loc"></span></div>
+        </div>
+        <div class="project-img">[ project photo ]<div class="project-sdgs" id="proj-sdgs"></div></div>
+        <div class="project-desc" id="proj-desc"></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- STORY -->
+<section class="story" id="story">
+  <div class="sec-head">
+    <div class="label" style="font-size: 13px">/ 03 — ORIGIN</div>
+    <h2>Why we started this:<br/><em>An OpSmile Story</em></h2>
+  </div>
+  <div class="story-grid">
+    <div class="story-visual">
+      <iframe src="https://www.youtube.com/embed/USjtNPvjJOA?si=eNWNMGMOYBjLrX9q" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    </div>
+    <div>
+      <span class="sec-label" style="font-size: 13px">The moment behind the mission</span>
+      <div class="story-body">
+        <p style="font-size: 16px">At 16, as I stood in the recovery room of an Operation Smile medical mission—translating between surgeons and nurses and playing with children before life-changing cleft palate surgeries—I had an idea that would change everything. As Finance Chair of Miles for Smiles (M4S), the largest student-led Operation Smile initiative in Mexico, I rallied over 1,000 runners each year for the M4S charity race and helped raise $30,000 annually— enough for around 20 surgeries.</p>
+        <p style="font-size: 16px">But I kept seeing a bigger pattern. While powerful, initiatives like M4S often operated in silos. So I asked myself: What if students everywhere could build something of their own... together?</p>
+      </div>
+    </div>
+    <div class="quote-callout">
+      <p>"Miles for Smiles is a reminder of what we can do when we come together for something bigger than ourselves."</p>
+      <div class="attr" style="font-size: 13px">— Lukah Villarreal, UNbound Youth Initiative Founder</div>
+    </div>
+  </div>
+</section>
+
+<!-- IMPACT FRAMEWORK -->
+<section class="sdg" id="sdg">
+  <div class="impact-head" id="impact-head">
+    <div class="label reveal-up" style="font-size: 13px">/ 04 — IMPACT PEDAGOGIES</div>
+    <h2 class="reveal-up" style="font-size: 60px">Our Model: Creative Process<br/>Meets <em>Global Purpose.</em></h2>
+    <p class="reveal-up delay" style="font-size: 16px">UNbound empowers students to become changemakers through a model rooted in Stanford's design thinking process and guided by the United Nations Sustainable Development Goals.</p>
+  </div>
+  <div class="impact-grid" id="impact-grid">
+    <figure class="impact-card">
+      <img src="design-thinking.png" alt="UNbound design thinking process: Empathize, Define, Ideate, Prototype, Test &amp; Revise" />
+      <figcaption style="font-size: 13px">The Design Thinking Process</figcaption>
+    </figure>
+    <figure class="impact-card sdg-figure">
+      <img src="sdgs.png" alt="United Nations Sustainable Development Goals" style="padding: 0px" />
+      <figcaption style="font-size: 16px">UN Sustainable Development Goals</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- GUEST SPEAKERS -->
+<section class="speakers" id="speakers">
+  <div class="sec-head">
+    <div class="label" style="font-size: 13px">/ 05 — GUEST SPEAKERS</div>
+    <h2 style="font-size: 60px">Learning from real
+<em>changemakers</em></h2>
+  </div>
+  <p class="speakers-intro">UNbound gives students a seat at the table with people who are actually changing the world. Our guest speakers share their stories, inspire deep reflection, and show what it looks like to turn conviction into action.</p>
+  <div class="speakers-grid">
+    <div class="speaker-card">
+      <div class="speaker-photo"><img src="img/Anton.jpg" alt="Anton Jongeneel" style="object-position: 50% 32%;" /></div>
+      <div class="speaker-body">
+        <h3>Anton Jongeneel</h3>
+        <div class="speaker-role">UNITED STATES REP · UN SECURITY COUNCIL</div>
+        <p>Anton Jongeneel is a Columbia Law School graduate currently serving as a U.S. Political Advisor in the UN Security Council, where he leads strategy on the Ukraine conflict. Over a 13-year State Department career, he has served in places like the  DRC and Afghanistan. At UNbound, Anton will reframe everyday empathy as a catalyst of global change.</p>
+      </div>
+    </div>
+    <div class="speaker-card">
+      <div class="speaker-photo"><img src="img/Brendan.webp" alt="Brendan Iribe" style="object-position: 50% 22%;" /></div>
+      <div class="speaker-body">
+        <h3>Brendan Iribe</h3>
+        <div class="speaker-role">CO-FOUNDER · OCULUS VR &amp; FORMER CEO</div>
+        <p>After redefining virtual reality with Oculus—which sold to Facebook for $2 billion in 2014—Brendan has worked on building Sesame, an AI wearable designed to make artificial intelligence physical and ever-present. In his Fellowship conference, Brendan will challenge Fellows to explore innovation as an inevitable byproduct of understanding and iteration.</p>
+      </div>
+    </div>
+    <div class="speaker-card">
+      <div class="speaker-photo"><img src="img/Seung.avif" alt="Seung" style="object-position: 60% 20%;" /></div>
+      <div class="speaker-body">
+        <h3>Seung Paik</h3>
+        <div class="speaker-role">RETIRED COLONEL · U.S. AIR FORCE</div>
+        <p>While teaching at the U.S. Air Force Academy, Seung created Leadernomics, a framework that has spent 20 years reaching leaders across government, the private sector, and academia. After 25 years of military service and a career of award-winning leadership, Seung strives to transform with his core belief in the power of "what is" and "what should be."</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section class="contact" id="join">
+  <div class="contact-head">
+    <h2>Ready to <em>Transform</em><br/>Your School?</h2>
+    <p style="font-size: 16px">Bring the UNbound methodology to your educational community and empower the next generation of changemakers.</p>
+    <p class="contact-sub" style="font-size: 17px; line-height: 0">
+</p>
+  </div>
+
+  <div class="audience-grid">
+    <div class="audience-card">
+      <div class="audience-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      </div>
+      <h3>Students</h3>
+      <p style="font-size: 14px">Want to start a service initiative at your school?</p>
+    </div>
+    <div class="audience-card">
+      <div class="audience-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+      </div>
+      <h3>Educators</h3>
+      <p style="font-size: 16px">Bring the UNbound Fellowship to your campus.</p>
+    </div>
+    <div class="audience-card">
+      <div class="audience-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+      </div>
+      <h3>Organizations</h3>
+      <p style="font-size: 16px">Partner with us to amplify youth impact.</p>
+    </div>
+  </div>
+
+  <div class="contact-body">
+    <form class="contact-form" onsubmit="return false;">
+      <h3>Get in Touch</h3>
+      <label>Name<input type="text" placeholder="Your full name" /></label>
+      <label>Email<input type="email" placeholder="your.email@example.com" /></label>
+      <label>Role<input type="text" placeholder="Student, Educator, Organization, etc." /></label>
+      <label>Message<textarea rows="4" placeholder="Tell us about your interest in UNbound, your school, or your project ideas…"></textarea></label>
+      <button type="submit" class="contact-send" style="background-color: rgb(96, 218, 199)">Send Message</button>
+    </form>
+    <div class="contact-side">
+      <div class="contact-info">
+        <div class="contact-info-head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+          Email Us
+        </div>
+        <a href="mailto:ljv6@rice.edu" style="font-size: 16px">ljv6@rice.edu (Founder)</a>
+        <a href="mailto:unboundyouthinitiative@gmail.com" style="font-size: 16px">unboundyouthinitiative@gmail.com</a>
+      </div>
+      <div class="contact-info">
+        <div class="contact-info-head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          Our Reach
+        </div>
+        <p style="font-size: 16px">Working with schools across the Tri-Association network and beyond.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="foot-grid">
+    <div class="brand-col">
+      <div class="brand">UNbound</div>
+      <p>A global student-led leadership network. Connecting schools, elevating student agency, building lasting community impact.</p>
+    </div>
+    <div>
+      <h4>Explore</h4>
+      <ul>
+        <li><a href="#mission">Mission</a></li>
+        <li><a href="#chapters">Chapters</a></li>
+        <li><a href="#story">Story</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Engage</h4>
+      <ul>
+        <li><a href="#sdg">Pedagogies</a></li>
+        <li><a href="#speakers">Speakers</a></li>
+        <li><a href="#join">Join</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="bot">
+    <span>© 2026 UNbound Youth Initiative</span>
+    <span>MEXICO · UNITED STATES · COLOMBIA · JAPAN · KOREA · FRANCE</span>
+    <span>Est. 2025</span>
+  </div>
+</footer>
+
+<script>
+  const SDG_COLORS = {1:'#E5243B',2:'#DDA63A',3:'#4C9F38',4:'#C5192D',5:'#FF3A21',6:'#26BDE2',7:'#FCC30B',8:'#A21942',9:'#FD6925',10:'#DD1367',11:'#FD9D24',12:'#BF8B2E',13:'#3F7E44',14:'#0A97D9',15:'#56C02B',16:'#00689D',17:'#19486A'};
+  const SDG_NAMES = {1:'No Poverty',2:'Zero Hunger',3:'Good Health & Well-Being',4:'Quality Education',5:'Gender Equality',6:'Clean Water & Sanitation',7:'Affordable & Clean Energy',8:'Decent Work & Growth',9:'Industry & Innovation',10:'Reduced Inequalities',11:'Sustainable Cities',12:'Responsible Consumption',13:'Climate Action',14:'Life Below Water',15:'Life on Land',16:'Peace & Justice',17:'Partnerships'};
+  const LOCATIONS = [
+    { lat: 41.89,  lng: -71.97,  name: 'Pomfret, USA',           color: '#00B4D8', size: 0.22, population: '4.2k',  year: '2025', projectTitle: 'Architecting the Network', fellowName: 'Founding Cohort', sdgs: [4,17], description: 'Founding chapter, setting program architecture and SDG frameworks for every chapter that followed. The team built the playbooks, mentorship rubrics, and design-thinking curriculum now used across the network.' },
+    { lat: 25.67,  lng: -100.31, name: 'Monterrey, Mexico',       color: '#90E0EF', size: 0.22, population: '1.1M',  year: '2025', projectTitle: 'Youth-Led Health Clinics', fellowName: 'Sofía R.', sdgs: [3,10], description: 'Partnering with municipal health workers to run student-staffed community wellness clinics, bringing basic screenings and health education to under-served neighborhoods across the metro area.' },
+    { lat: 24.02,  lng: -108.40, name: 'Durango, Mexico',         color: '#009bbf', size: 0.22, population: '654k',  year: '2026', projectTitle: 'Student Voice Workshops', fellowName: 'Mateo L.', sdgs: [4,16], description: 'Design-led workshops paired with service projects to amplify student voice in local schools, giving young people the tools and platforms to advocate for change in their own communities.' },
+    { lat: 20.66,  lng: -103.35, name: 'Guadalajara, Mexico',     color: '#8ef0dc', size: 0.22, population: '1.4M',  year: '2026', projectTitle: 'Digital Literacy Circles', fellowName: 'Valentina G.', sdgs: [4,10], description: 'An intergenerational care and digital-literacy program connecting students with elders, closing the technology gap one mentoring session at a time and building lasting community bonds.' },
+    { lat: 16.20,  lng: -106.80, name: 'Puerto Vallarta, Mexico', color: '#00B4D8', size: 0.22, population: '291k',  year: '2026', projectTitle: 'Coastal Conservation Lab', fellowName: 'Diego M.', sdgs: [14,13], description: 'A coastal conservation and marine-education partnership run with local fishing cooperatives, restoring shoreline habitats while teaching the next generation to steward their ocean ecosystems.' },
+    { lat: 10.39,  lng: -75.48,  name: 'Cartagena, Colombia',     color: '#90E0EF', size: 0.22, population: '914k',  year: '2025', projectTitle: 'Literacy & Mentorship', fellowName: 'Camila O.', sdgs: [4,1], description: 'After-school literacy and mentorship circles for displaced and first-generation youth, pairing tutoring with social-emotional support to keep at-risk students engaged and in school.' },
+    { lat: 4.80,   lng: -73.00,  name: 'Nueva Granada, Colombia', color: '#009bbf', size: 0.22, population: '15k',   year: '2026', projectTitle: 'Chapter-to-Chapter Bridge', fellowName: 'Andrés P.', sdgs: [17,11], description: 'The first UNbound chapter-to-chapter partnership, twinning rural and urban Colombian schools to share resources, co-design projects, and prove that collaboration scales impact.' },
+    { lat: 35.68,  lng: 139.69,  name: 'Tokyo, Japan',            color: '#8ef0dc', size: 0.22, population: '14M',   year: '2026', projectTitle: 'Open-Source for Good', fellowName: 'Yuki T.', sdgs: [9,17], description: 'Building open-source digital tools alongside community nonprofits across the city, equipping grassroots organizations with the technology they need to expand their reach and serve more people.' }
+  ];
+
+  const ARCS = LOCATIONS.map((loc, i) => {
+    const next = LOCATIONS[(i + 1) % LOCATIONS.length];
+    return { startLat: loc.lat, startLng: loc.lng, endLat: next.lat, endLng: next.lng, color: [loc.color, next.color] };
+  });
+
+  // Wait for globe.gl to load
+  window.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('globe-el');
+    const container = el.parentElement;
+
+    const globe = Globe({ animateIn: false })(el);
+
+    function resize() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w > 0 && h > 0) {
+        globe.width(w).height(h);
+      }
+    }
+
+    globe
+      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+      .backgroundColor('rgba(0,0,0,0)')
+      // Points
+      .pointsData(LOCATIONS)
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointColor('color')
+      .pointAltitude('size')
+      .pointRadius(0.9)
+      .pointsMerge(false)
+      .pointLabel('name')
+      // Rings
+      .ringsData(LOCATIONS)
+      .ringLat('lat')
+      .ringLng('lng')
+      .ringColor(d => t => {
+        const hex = d.color.replace('#', '');
+        const r = parseInt(hex.substring(0,2), 16);
+        const g = parseInt(hex.substring(2,4), 16);
+        const b = parseInt(hex.substring(4,6), 16);
+        return `rgba(${r},${g},${b},${1 - t})`;
+      })
+      .ringMaxRadius(5)
+      .ringPropagationSpeed(2)
+      .ringRepeatPeriod(1000)
+      // Arcs
+      .arcsData(ARCS)
+      .arcStartLat('startLat')
+      .arcStartLng('startLng')
+      .arcEndLat('endLat')
+      .arcEndLng('endLng')
+      .arcColor('color')
+      .arcDashLength(0.4)
+      .arcDashGap(0.2)
+      .arcDashAnimateTime(2500)
+      // Atmosphere
+      .atmosphereColor('#00b4d8')
+      .atmosphereAltitude(0.15)
+      // Click
+      .onPointClick(point => showCard(point))
+      .onPointHover(point => {
+        const canvas = globe.renderer().domElement;
+        canvas.style.cursor = point ? 'pointer' : 'grab';
+        // Pause the spin while hovering a pin so it's easy to click; resume on leave
+        if (globe.controls()) globe.controls().autoRotate = !point;
+      });
+
+    // Controls
+    const controls = globe.controls();
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.0;
+    controls.minDistance = 200;
+    controls.maxDistance = 420;
+
+    // Initial size + observer
+    resize();
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(resize);
+    });
+    ro.observe(container);
+
+    // Project popup (replaces "The Fellowship" card)
+    const fellowship  = document.getElementById('fellowship-card');
+    const projectCard = document.getElementById('project-card');
+    const projClose   = document.getElementById('proj-close');
+
+    function showCard(loc) {
+      document.getElementById('proj-year').textContent  = loc.year + ' · Fellow Project';
+      document.getElementById('proj-name').textContent  = loc.fellowName;
+      document.getElementById('proj-title').textContent = loc.projectTitle;
+      document.getElementById('proj-loc').textContent   = loc.name;
+      document.getElementById('proj-desc').textContent  = loc.description;
+      document.getElementById('proj-bar').style.backgroundColor = loc.color;
+      const sdgWrap = document.getElementById('proj-sdgs');
+      sdgWrap.innerHTML = '';
+      (loc.sdgs || []).forEach(n => {
+        const sq = document.createElement('span');
+        sq.className = 'sdg-sq';
+        sq.style.backgroundColor = SDG_COLORS[n] || '#888';
+        sq.textContent = n;
+        sq.title = 'SDG ' + n + ' — ' + (SDG_NAMES[n] || '');
+        sdgWrap.appendChild(sq);
+      });
+      fellowship.classList.add('hidden');
+      projectCard.classList.add('show');
+    }
+
+    projClose.addEventListener('click', () => {
+      projectCard.classList.remove('show');
+      fellowship.classList.remove('hidden');
+    });
+  });
+</script>
+
+<script>
+  // ---- Hero image carousel ----
+  (function () {
+    const track = document.getElementById('hc-track');
+    if (!track) return;
+    const total = track.children.length;
+    const dotsWrap = document.getElementById('hc-dots');
+    let idx = 0, timer;
+    for (let i = 0; i < total; i++) {
+      const b = document.createElement('button');
+      b.setAttribute('aria-label', 'Go to image ' + (i + 1));
+      if (i === 0) b.classList.add('on');
+      b.addEventListener('click', () => { go(i); restart(); });
+      dotsWrap.appendChild(b);
+    }
+    const dots = dotsWrap.children;
+    function go(n) {
+      idx = (n + total) % total;
+      track.style.transform = 'translateX(-' + (idx * 100) + '%)';
+      for (let i = 0; i < dots.length; i++) dots[i].classList.toggle('on', i === idx);
+    }
+    function restart() { clearInterval(timer); timer = setInterval(() => go(idx + 1), 4500); }
+    document.getElementById('hc-next').addEventListener('click', () => { go(idx + 1); restart(); });
+    document.getElementById('hc-prev').addEventListener('click', () => { go(idx - 1); restart(); });
+    restart();
+  })();
+
+  // ---- Scroll-driven reveals (re-trigger every time a section re-enters view) ----
+  (function () {
+    const vh = () => window.innerHeight || document.documentElement.clientHeight;
+
+    // Generic "is the element's top edge within the reveal zone"
+    function entered(el, factor) {
+      const r = el.getBoundingClientRect();
+      return r.top < vh() * (factor || 0.85) && r.bottom > 0;
+    }
+    function outOfView(el) {
+      const r = el.getBoundingClientRect();
+      return r.bottom < 0 || r.top > vh();
+    }
+    // Whole element fully inside the viewport (or dominating it if taller)
+    function fullyInView(el) {
+      const r = el.getBoundingClientRect(), h = vh();
+      if (r.height <= h) return r.top >= 0 && r.bottom <= h;
+      return r.top <= 0 && r.bottom >= h;
+    }
+
+    // --- Impact Pedagogies head + cards ---
+    const impactHead = document.getElementById('impact-head');
+    const impactGrid = document.getElementById('impact-grid');
+    const impactCards = impactGrid ? [...impactGrid.querySelectorAll('.impact-card')] : [];
+
+    // --- Mission counters ---
+    const missionWrap = document.getElementById('mission-stats');
+    const missionNums = missionWrap ? [...missionWrap.querySelectorAll('.mstat-n[data-count]')] : [];
+    let missionRunning = false;
+    function runMission() {
+      if (missionRunning) return; missionRunning = true;
+      missionNums.forEach(el => {
+        const target = parseInt(el.getAttribute('data-count'), 10);
+        const dur = 3000, t0 = performance.now();
+        function tick(now) {
+          if (!missionRunning) return;
+          const p = Math.min((now - t0) / dur, 1);
+          const eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = Math.round(eased * target);
+          if (p < 1) requestAnimationFrame(tick); else el.textContent = target;
+        }
+        requestAnimationFrame(tick);
+      });
+    }
+    function resetMission() {
+      missionRunning = false;
+      missionNums.forEach(el => { el.textContent = '0'; });
+    }
+
+    // --- Speaker cards ---
+    const speakerCards = [...document.querySelectorAll('.speakers-grid .speaker-card')];
+
+    let ticking = false;
+    function update() {
+      ticking = false;
+
+      if (impactHead) impactHead.classList.toggle('in', entered(impactHead, 0.82) && !outOfView(impactHead));
+      if (impactGrid) {
+        const show = entered(impactGrid, 0.85) && !outOfView(impactGrid);
+        impactCards.forEach(c => c.classList.toggle('in', show));
+      }
+
+      if (missionWrap) {
+        if (entered(missionWrap, 0.8) && !outOfView(missionWrap)) runMission();
+        else if (outOfView(missionWrap)) resetMission();
+      }
+
+      speakerCards.forEach(card => {
+        const img = card.querySelector('.speaker-photo img') || card;
+        if (fullyInView(img)) card.classList.add('in');
+        else if (outOfView(card)) card.classList.remove('in');
+      });
+    }
+    function onScroll() {
+      if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+
+    // IntersectionObserver drives re-checks too, so this works regardless of
+    // which element actually scrolls (window, body, or a wrapping container).
+    const io = new IntersectionObserver(onScroll, {
+      threshold: [0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]
+    });
+    [impactHead, impactGrid, missionWrap, ...speakerCards]
+      .filter(Boolean)
+      .forEach(el => io.observe(el));
+
+    update();
+  })();
+
+  // Re-scroll to hash target after full load (fixes cross-page #anchor landing above section)
+  (function () {
+    function scrollToHash() {
+      if (!location.hash) return;
+      var el = document.querySelector(location.hash);
+      if (el) el.scrollIntoView();
+    }
+    window.addEventListener('load', function () { setTimeout(scrollToHash, 60); });
+  })();
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fellow Login — UNbound</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ink:    #003249;
+      --ink-mid:#2a5068;
+      --ink-dim:#5f7689;
+      --accent: #00B4D8;
+      --border: #dde7ed;
+      --display:'Montserrat', 'Times New Roman', serif;
+      --sans:   'Montserrat', system-ui, sans-serif;
+      --mono:   'IBM Plex Mono', ui-monospace, monospace;
+      --nav-h:  92px;
+    }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--sans); color: var(--ink); -webkit-font-smoothing: antialiased;
+      min-height: 100vh; position: relative; overflow-x: hidden;
+      background: linear-gradient(to bottom, #c8eefb 0%, #5cd8c4 100%);
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* Map overlay with a slight margin on each side */
+    .map-overlay {
+      position: fixed; inset: 28px; z-index: 0; pointer-events: none;
+      background: url('map.svg') center/contain no-repeat;
+      opacity: 0.9;
+    }
+
+    /* NAV */
+    nav.top {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      display: flex; align-items: center;
+      height: var(--nav-h); padding: 0 48px;
+      background: rgba(228,242,252,0.94); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    nav.top .brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--sans); font-size: 26px; letter-spacing: -0.01em;
+      color: #0264A7; font-weight: 700; line-height: 1;
+    }
+    nav.top .brand img { height: 52px; width: auto; object-fit: contain; }
+
+    /* LOGIN */
+    .login-wrap {
+      position: relative; z-index: 1;
+      min-height: 100vh; display: grid; place-items: center;
+      padding: calc(var(--nav-h) + 40px) 24px 56px;
+    }
+    .login-card {
+      width: 100%; max-width: 440px;
+      background: #fff; border-radius: 20px;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 60px rgba(0,50,73,0.18);
+      padding: 44px 40px 40px;
+    }
+    .login-card h1 {
+      font-family: var(--display); font-weight: 600; font-size: 38px;
+      letter-spacing: -0.02em; color: var(--ink); line-height: 1.05;
+    }
+    .login-intro {
+      margin-top: 14px; font-size: 14.5px; line-height: 1.6;
+      color: var(--ink-dim); font-weight: 400;
+    }
+    form { margin-top: 30px; display: flex; flex-direction: column; gap: 18px; }
+    label {
+      display: flex; flex-direction: column; gap: 8px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--ink-mid); font-weight: 600;
+    }
+    input {
+      font-family: var(--sans); font-size: 15px; font-weight: 400; color: var(--ink);
+      padding: 13px 15px; border-radius: 10px;
+      border: 1.5px solid var(--border); background: #f7fbfd;
+      transition: border-color .2s, background .2s;
+    }
+    input::placeholder { color: #9bb0bd; }
+    input:focus { outline: none; border-color: var(--accent); background: #fff; }
+    .login-btn {
+      margin-top: 8px; padding: 14px; border: none; border-radius: 10px; cursor: pointer;
+      background: var(--accent); color: #fff; font-family: var(--sans);
+      font-size: 14px; font-weight: 600; letter-spacing: 0.04em;
+      transition: background .2s, transform .2s; transform-origin: center;
+    }
+    .login-btn:hover { background: #009bbf; transform: scale(1.03); }
+    .login-foot {
+      margin-top: 22px; text-align: center; font-size: 12.5px; color: var(--ink-dim);
+    }
+    .login-foot a { color: var(--accent); font-weight: 600; }
+
+    @media (max-width: 560px) {
+      nav.top { padding: 0 24px; }
+      .login-card { padding: 34px 26px 30px; }
+      .login-card h1 { font-size: 32px; }
+      .map-overlay { inset: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="map-overlay" aria-hidden="true"></div>
+
+  <nav class="top">
+    <a class="brand" href="UNbound.html">
+      <img src="logo.png" alt="UNbound Logo" onerror="this.style.display='none'" />
+      UNbound
+    </a>
+  </nav>
+
+  <main class="login-wrap">
+    <div class="login-card">
+      <h1>Fellow Login</h1>
+      <p class="login-intro">Log in to access your resources, track your project, and connect with your cohort. Contact the Fellowship Execs for your user info.</p>
+      <form onsubmit="window.location.href='fellow-dashboard.html'; return false;">
+        <label>Username
+          <input type="text" name="username" placeholder="Your fellow username" autocomplete="username" />
+        </label>
+        <label>Password
+          <input type="password" name="password" placeholder="••••••••" autocomplete="current-password" />
+        </label>
+        <button type="submit" class="login-btn">Log In</button>
+      </form>
+      <div class="login-foot">Need access? <a href="UNbound.html#join">Reach the Fellowship Execs →</a></div>
+    </div>
+  </main>
+
+</body>
+</html>

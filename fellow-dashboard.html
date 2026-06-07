@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fellow Dashboard — UNbound</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="dashboard.css" />
+<style>
+  /* ===== Overview ===== */
+  .ov-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; align-items: start; }
+  .stat-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; margin-bottom: 22px; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+  .stat .ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; margin-bottom: 16px; }
+  .stat .ico svg { width: 20px; height: 20px; }
+  .stat .lbl { font-size: 13px; color: var(--ink-dim); font-weight: 500; }
+  .stat .val { font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -0.01em; margin-top: 3px; }
+  .stat .sub { font-size: 12px; color: var(--ink-faint); margin-top: 6px; font-weight: 500; }
+
+  .project-hero {
+    background: linear-gradient(135deg, var(--navy) 0%, #074b6b 100%); color: #fff;
+    border-radius: var(--radius); padding: 28px 30px; position: relative; overflow: hidden;
+  }
+  .project-hero::after {
+    content: ""; position: absolute; right: -40px; top: -40px; width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(0,180,216,0.45), transparent 70%); pointer-events: none;
+  }
+  .project-hero .eyebrow { color: var(--accent-light); }
+  .project-hero h2 { font-family: var(--display); font-weight: 700; font-size: 27px; margin: 8px 0 16px; letter-spacing: -0.01em; }
+  .ph-meta { display: flex; gap: 30px; flex-wrap: wrap; }
+  .ph-meta .lab { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.55); font-weight: 600; }
+  .ph-meta .v { font-size: 15px; font-weight: 600; margin-top: 4px; }
+  .team-stack { display: flex; align-items: center; margin-top: 6px; }
+  .team-stack .av {
+    width: 34px; height: 34px; border-radius: 50%; margin-left: -9px; border: 2px solid #074b6b;
+    display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--navy);
+  }
+  .team-stack .av:first-child { margin-left: 0; }
+
+  .phase-card { margin-top: 22px; }
+  .phase-track { display: flex; gap: 8px; margin-top: 18px; }
+  .phase-step { flex: 1; text-align: center; }
+  .phase-step .bar { height: 7px; border-radius: 99px; background: var(--border); }
+  .phase-step.done .bar { background: var(--green); }
+  .phase-step.current .bar { background: var(--accent); }
+  .phase-step .nm { font-size: 11.5px; font-weight: 600; margin-top: 9px; color: var(--ink-dim); }
+  .phase-step.done .nm, .phase-step.current .nm { color: var(--ink); }
+  .phase-step .ph { font-size: 10px; color: var(--ink-faint); margin-top: 2px; }
+
+  .sdg-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .sdg-chip { display: flex; align-items: center; gap: 9px; padding: 8px 14px 8px 8px; border-radius: 11px; background: var(--bg); border: 1px solid var(--border); }
+  .sdg-chip .sq { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; font-family: var(--mono); }
+  .sdg-chip .nm { font-size: 13px; font-weight: 600; color: var(--ink-mid); }
+
+  .progress-card { cursor: pointer; transition: transform .2s, box-shadow .2s; }
+  .progress-card:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(0,50,73,0.12); }
+  .progress-top { display: flex; align-items: center; justify-content: space-between; }
+  .progress-pct { font-family: var(--display); font-weight: 800; font-size: 26px; color: var(--accent-dk); }
+  .progress-bar-wrap { height: 14px; border-radius: 99px; background: var(--bg); border: 1px solid var(--border); margin: 16px 0 10px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-light)); width: 0; transition: width 1.1s cubic-bezier(.22,1,.36,1); }
+  .progress-hint { font-size: 12.5px; color: var(--ink-dim); display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .progress-hint svg { width: 14px; height: 14px; }
+
+  /* ===== Tasks ===== */
+  .task-section-title { font-family: var(--display); font-weight: 700; font-size: 19px; margin: 6px 0 4px; display: flex; align-items: center; gap: 10px; }
+  .task-count { font-size: 12px; font-weight: 600; color: var(--ink-dim); background: var(--bg); border: 1px solid var(--border); border-radius: 99px; padding: 2px 10px; }
+  .task-group { margin-bottom: 34px; }
+  .task-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+  .task-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px; display: flex; gap: 16px; align-items: center;
+  }
+  .task-thumb {
+    width: 64px; height: 64px; border-radius: 12px; flex-shrink: 0;
+    display: grid; place-items: center; color: #fff;
+  }
+  .task-thumb svg { width: 28px; height: 28px; }
+  .task-main { flex: 1; min-width: 0; }
+  .task-badge {
+    display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono);
+    font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; white-space: nowrap;
+    color: var(--accent-dk); background: var(--accent-soft); border-radius: 99px; padding: 3px 9px; margin-bottom: 7px;
+  }
+  .task-badge svg { width: 11px; height: 11px; }
+  .task-h { font-size: 15.5px; font-weight: 700; color: var(--ink); }
+  .task-d { font-size: 13px; color: var(--ink-dim); margin-top: 3px; line-height: 1.5; }
+  .task-actions { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+  .task-del { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--ink-faint); transition: background .15s, color .15s; }
+  .task-del:hover { background: #fdecef; color: #e0506a; }
+  .task-del svg { width: 15px; height: 15px; }
+  /* self task (simple text) */
+  .task-card.self { padding: 13px 16px; }
+  .task-card.self .task-h { font-weight: 600; font-size: 14.5px; }
+  .add-task-row { display: flex; gap: 10px; margin-top: 14px; }
+  .add-task-row input {
+    flex: 1; font: inherit; font-size: 14px; padding: 12px 15px; border-radius: 11px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--ink); outline: none;
+  }
+  .add-task-row input:focus { border-color: var(--accent); }
+  .task-empty { font-size: 13px; color: var(--ink-faint); padding: 14px 2px; font-style: italic; }
+  .tasks-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+
+  /* ===== Docs ===== */
+  .docs-table { width: 100%; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; border-collapse: collapse; }
+  .docs-table th {
+    text-align: left; font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-dim); font-weight: 600; padding: 15px 20px; background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .docs-table td { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+  .docs-table tr:last-child td { border-bottom: none; }
+  .docs-table tr:hover td { background: var(--accent-soft); }
+  .doc-name { display: flex; align-items: center; gap: 11px; font-weight: 600; color: var(--ink); }
+  .doc-ico { width: 30px; height: 30px; border-radius: 8px; background: var(--accent-soft); display: grid; place-items: center; color: var(--accent-dk); flex-shrink: 0; }
+  .doc-ico svg { width: 16px; height: 16px; }
+  .doc-link { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12.5px; color: var(--accent-dk); background: var(--bg); border: 1px solid var(--border); padding: 5px 11px; border-radius: 8px; }
+  .doc-link svg { width: 13px; height: 13px; }
+  .doc-by { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; color: var(--ink-mid); }
+  .doc-by .av { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg,var(--accent),var(--accent-light)); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--navy); }
+  .doc-desc { color: var(--ink-dim); }
+
+  /* ===== Meeting Hub ===== */
+  .mh-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+  .mh-controls label { font-size: 13px; font-weight: 600; color: var(--ink-mid); }
+  .mh-controls select { font: inherit; font-size: 14px; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); }
+  .mh-legend { display: flex; align-items: center; gap: 18px; font-size: 12.5px; color: var(--ink-dim); font-weight: 500; }
+  .mh-legend .sw { display: inline-flex; align-items: center; gap: 7px; }
+  .mh-legend .sw i { width: 18px; height: 14px; border-radius: 3px; display: inline-block; border: 1px solid var(--border); }
+  .mh-grids { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .mh-panel h3 { font-family: var(--display); font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+  .mh-panel .hint { font-size: 12.5px; color: var(--ink-dim); margin-bottom: 14px; }
+  .w2m { display: grid; }
+  .w2m .corner, .w2m .dayhdr { font-size: 11.5px; font-weight: 700; text-align: center; padding-bottom: 6px; color: var(--ink-mid); }
+  .w2m .dayhdr small { display: block; font-weight: 500; color: var(--ink-faint); font-size: 10px; }
+  .w2m .timelbl { font-size: 10.5px; color: var(--ink-dim); text-align: right; padding-right: 9px; transform: translateY(-6px); font-family: var(--mono); }
+  .w2m .cell { height: 22px; border: 1px solid var(--border); border-top: none; border-left: none; cursor: pointer; }
+  .w2m .cell.av { background: var(--accent); }
+  .w2m.group .cell { cursor: default; }
+  @media (max-width: 1040px) { .mh-grids { grid-template-columns: 1fr; } .ov-grid { grid-template-columns: 1fr; } }
+
+  /* ===== Milestones ===== */
+  .ms-summary { display: flex; align-items: center; gap: 26px; background: linear-gradient(135deg,var(--navy),#074b6b); color: #fff; border-radius: var(--radius); padding: 26px 30px; margin-bottom: 28px; position: relative; overflow: hidden; }
+  .ms-summary::after { content:""; position:absolute; right:-30px; bottom:-50px; width:200px; height:200px; background: radial-gradient(circle, rgba(0,180,216,0.4), transparent 70%); }
+  .ms-ring { width: 96px; height: 96px; flex-shrink: 0; }
+  .ms-summary .lvl { font-family: var(--display); font-weight: 800; font-size: 24px; }
+  .ms-summary .sub { font-size: 13.5px; color: rgba(255,255,255,0.7); margin-top: 4px; max-width: 380px; }
+  .ms-xpbar { height: 9px; border-radius: 99px; background: rgba(255,255,255,0.18); margin-top: 14px; overflow: hidden; max-width: 380px; }
+  .ms-xpbar i { display: block; height: 100%; background: linear-gradient(90deg,var(--accent),var(--accent-light)); border-radius: 99px; }
+  .badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 18px; }
+  .badge {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px 20px; text-align: center; position: relative; transition: transform .18s, box-shadow .18s;
+  }
+  .badge.earned:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(0,50,73,0.1); }
+  .badge .medal {
+    width: 74px; height: 74px; border-radius: 50%; margin: 0 auto 14px; display: grid; place-items: center;
+    color: #fff; position: relative;
+  }
+  .badge .medal svg { width: 34px; height: 34px; }
+  .badge.locked .medal { background: #e6edf2 !important; color: var(--ink-faint); }
+  .badge.locked { opacity: 0.85; }
+  .badge .bt { font-size: 14.5px; font-weight: 700; color: var(--ink); }
+  .badge .bd { font-size: 12px; color: var(--ink-dim); margin-top: 5px; line-height: 1.45; }
+  .badge .lock-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-top: 10px; font-weight: 600; }
+  .badge .earned-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin-top: 10px; font-weight: 600; }
+  .badge .prog { height: 6px; border-radius: 99px; background: var(--bg); border: 1px solid var(--border); margin-top: 12px; overflow: hidden; }
+  .badge .prog i { display: block; height: 100%; background: var(--accent); }
+
+  .view { display: none; }
+  .view.active { display: block; opacity: 1; }
+
+  .mobile-menu { display: none; }
+  @media (max-width: 900px) {
+    .mobile-menu { display: grid; }
+    .stat-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <a class="sb-brand" href="UNbound.html" title="Back to UNbound.org">
+    <img src="logo.png" alt="UNbound" onerror="this.style.display='none'" />
+    <span class="wm">UNbound</span>
+  </a>
+  <nav class="sb-nav" id="sbNav">
+    <button class="nav-item active" data-view="overview" onclick="showView('overview')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" data-view="tasks" onclick="showView('tasks')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Tasks
+    </button>
+    <button class="nav-item" data-view="docs" onclick="showView('docs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+      Important Docs
+    </button>
+    <button class="nav-item" data-view="meetings" onclick="showView('meetings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Meeting Hub
+    </button>
+    <button class="nav-item" data-view="milestones" onclick="showView('milestones')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.5 12.5L17 22l-5-3-5 3 1.5-9.5"/></svg>
+      Milestones &amp; Achievements
+    </button>
+  </nav>
+  <div class="sb-foot">
+    <div class="sb-profile">
+      <div class="avatar">LV</div>
+      <div class="who"><div class="nm">Lukah Villarreal</div><div class="rl">Fellow · Monterrey</div></div>
+    </div>
+    <a class="sb-logout" href="fellow-login.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Log out
+    </a>
+  </div>
+</aside>
+
+<div class="main">
+  <header class="topbar">
+    <button class="icon-btn mobile-menu" onclick="document.getElementById('sidebar').classList.toggle('open')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="Search tasks, docs, meetings…" />
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn"><span class="dot"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>
+  </header>
+
+  <div class="content">
+
+    <!-- ================= OVERVIEW ================= -->
+    <section class="view active" id="view-overview">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Fellow Dashboard</div>
+          <h1>Welcome back, Lukah <span style="font-size:30px">👋</span></h1>
+          <div class="sub">Cohort 2026–2027 · You're in the <strong>Launch Sequence</strong> phase</div>
+        </div>
+        <button class="btn btn-primary" onclick="showView('tasks')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          View Tasks
+        </button>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat">
+          <div class="ico" style="background:var(--accent-soft);color:var(--accent-dk)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+          <div class="lbl">Open Tasks</div>
+          <div class="val" id="ovOpenTasks">—</div>
+          <div class="sub">across team &amp; personal</div>
+        </div>
+        <div class="stat">
+          <div class="ico" style="background:var(--green-soft);color:var(--green)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="lbl">Completed</div>
+          <div class="val" id="ovDoneTasks">—</div>
+          <div class="sub">keep the momentum</div>
+        </div>
+        <div class="stat">
+          <div class="ico" style="background:#eef0ff;color:#5b62d6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.5 12.5L17 22l-5-3-5 3 1.5-9.5"/></svg></div>
+          <div class="lbl">Badges Earned</div>
+          <div class="val">4<span style="font-size:16px;color:var(--ink-faint);font-weight:600"> / 9</span></div>
+          <div class="sub">Trailblazer level</div>
+        </div>
+      </div>
+
+      <div class="ov-grid">
+        <div>
+          <div class="project-hero">
+            <div class="eyebrow">Your Project</div>
+            <h2>Bridges to Brighter Smiles</h2>
+            <div class="ph-meta">
+              <div>
+                <div class="lab">Current Phase</div>
+                <div class="v">🚀 Launch Sequence</div>
+              </div>
+              <div>
+                <div class="lab">Chapter</div>
+                <div class="v">Monterrey, MX</div>
+              </div>
+              <div>
+                <div class="lab">Team</div>
+                <div class="team-stack">
+                  <div class="av" style="background:#90E0EF">LV</div>
+                  <div class="av" style="background:#7fd1c4">SR</div>
+                  <div class="av" style="background:#a7c8f0">MO</div>
+                  <div class="av" style="background:#f0c98a">DN</div>
+                  <div class="av" style="background:rgba(255,255,255,0.85);color:#074b6b">+2</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card phase-card">
+            <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>Fellowship Phases</div>
+            <div class="phase-track" id="phaseTrack"></div>
+          </div>
+
+          <div class="card phase-card">
+            <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>SDGs Selected</div>
+            <div class="sdg-chips">
+              <div class="sdg-chip"><span class="sq" style="background:#4C9F38">3</span><span class="nm">Good Health &amp; Well-Being</span></div>
+              <div class="sdg-chip"><span class="sq" style="background:#C5192D">4</span><span class="nm">Quality Education</span></div>
+              <div class="sdg-chip"><span class="sq" style="background:#DD1367">10</span><span class="nm">Reduced Inequalities</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card progress-card" onclick="window.location.href='fellowship-journey.html'">
+            <div class="progress-top">
+              <div class="card-title" style="font-size:15px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Overall Completion</div>
+              <div class="progress-pct">42%</div>
+            </div>
+            <div class="progress-bar-wrap"><div class="progress-bar-fill" id="ovProgress" data-pct="42"></div></div>
+            <div class="progress-hint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              Click to revisit completed phases &amp; meetings
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:22px">
+            <div class="card-title" style="font-size:15px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Next Up</div>
+            <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;gap:12px;align-items:center">
+                <div style="width:44px;height:44px;border-radius:10px;background:var(--accent-soft);color:var(--accent-dk);display:grid;place-items:center;font-family:var(--mono);font-weight:600;font-size:12px;line-height:1.1;text-align:center">JUN<br>14</div>
+                <div><div style="font-size:14px;font-weight:600">Cohort Sync — Prototype Review</div><div style="font-size:12.5px;color:var(--ink-dim)">Sat · 4:00 PM CT · Zoom</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:center">
+                <div style="width:44px;height:44px;border-radius:10px;background:var(--amber-soft);color:#a4760a;display:grid;place-items:center;font-family:var(--mono);font-weight:600;font-size:12px;line-height:1.1;text-align:center">JUN<br>18</div>
+                <div><div style="font-size:14px;font-weight:600">Mentor 1:1 — Diego N.</div><div style="font-size:12.5px;color:var(--ink-dim)">Wed · 6:30 PM CT</div></div>
+              </div>
+            </div>
+            <button class="btn btn-ghost" style="width:100%;margin-top:16px" onclick="showView('meetings')">Open Meeting Hub</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TASKS ================= -->
+    <section class="view" id="view-tasks">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Workspace</div>
+          <h1>Tasks</h1>
+          <div class="sub">Track team deliverables and your personal to-dos</div>
+        </div>
+        <button class="btn btn-ghost" id="completedToggle" onclick="toggleCompleted()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          View Completed Tasks
+        </button>
+      </div>
+
+      <div id="tasksMain">
+        <div class="task-group">
+          <div class="task-section-title">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Team Tasks <span class="task-count" id="teamCount"></span>
+          </div>
+          <div class="task-list" id="teamList"></div>
+          <div class="add-task-row">
+            <input type="text" id="addTeamInput" placeholder="Add a team task…" onkeydown="if(event.key==='Enter')addTask('team')" />
+            <button class="btn btn-primary" onclick="addTask('team')">Add</button>
+          </div>
+        </div>
+
+        <div class="task-group">
+          <div class="task-section-title">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Your Tasks <span class="task-count" id="youCount"></span>
+          </div>
+          <div class="task-list" id="youList"></div>
+          <div class="add-task-row">
+            <input type="text" id="addYouInput" placeholder="Add a personal task…" onkeydown="if(event.key==='Enter')addTask('you')" />
+            <button class="btn btn-primary" onclick="addTask('you')">Add</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="tasksCompleted" style="display:none">
+        <div class="task-group">
+          <div class="task-section-title">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Completed Tasks <span class="task-count" id="compCount"></span>
+          </div>
+          <div class="task-list" id="completedList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= DOCS ================= -->
+    <section class="view" id="view-docs">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Resources</div>
+          <h1>Important Docs</h1>
+          <div class="sub">Shared templates, guides, and references for your cohort</div>
+        </div>
+        <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Doc</button>
+      </div>
+      <table class="docs-table">
+        <thead><tr><th>Document</th><th>Link</th><th>Created by</th><th>Description</th></tr></thead>
+        <tbody id="docsBody"></tbody>
+      </table>
+    </section>
+
+    <!-- ================= MEETINGS ================= -->
+    <section class="view" id="view-meetings">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Scheduling</div>
+          <h1>Meeting Hub</h1>
+          <div class="sub">Mark your availability — the group view updates as your team responds</div>
+        </div>
+      </div>
+      <div class="mh-controls">
+        <label for="tzSel">Your Time Zone:</label>
+        <select id="tzSel">
+          <option>America/Monterrey (CT)</option>
+          <option>America/New_York (ET)</option>
+          <option>America/Bogotá (COT)</option>
+          <option>Asia/Tokyo (JST)</option>
+        </select>
+        <div style="flex:1"></div>
+        <div class="mh-legend">
+          <span class="sw"><i style="background:var(--bg)"></i> Unavailable</span>
+          <span class="sw"><i style="background:var(--accent)"></i> Available</span>
+        </div>
+      </div>
+      <div class="mh-grids">
+        <div class="mh-panel card">
+          <h3>Lukah's Availability</h3>
+          <div class="hint">Click &amp; drag to toggle — saved instantly</div>
+          <div class="w2m" id="myGrid"></div>
+        </div>
+        <div class="mh-panel card">
+          <h3>Group's Availability</h3>
+          <div class="hint">Darker cyan means more of the team is free</div>
+          <div class="w2m group" id="groupGrid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= MILESTONES ================= -->
+    <section class="view" id="view-milestones">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Progress</div>
+          <h1>Milestones &amp; Achievements</h1>
+          <div class="sub">Earn badges as you move through the Fellowship</div>
+        </div>
+      </div>
+      <div class="ms-summary">
+        <svg class="ms-ring" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="11"/>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#00B4D8" stroke-width="11" stroke-linecap="round"
+                  stroke-dasharray="314" stroke-dashoffset="174" transform="rotate(-90 60 60)"/>
+          <text x="60" y="58" text-anchor="middle" fill="#fff" font-size="26" font-weight="800" font-family="Montserrat">4</text>
+          <text x="60" y="76" text-anchor="middle" fill="rgba(255,255,255,0.65)" font-size="11" font-family="Montserrat">of 9</text>
+        </svg>
+        <div>
+          <div class="lvl">Trailblazer · Level 2</div>
+          <div class="sub">You've earned 4 badges and 920 XP. Complete the Prototype phase to unlock the Builder medal.</div>
+          <div class="ms-xpbar"><i style="width:64%"></i></div>
+        </div>
+      </div>
+      <div class="badge-grid" id="badgeGrid"></div>
+    </section>
+
+  </div>
+</div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>
