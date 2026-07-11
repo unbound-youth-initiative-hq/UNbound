@@ -312,7 +312,7 @@
       line-height: 1; letter-spacing: -0.02em; color: var(--accent);
     }
     .mstat-l {
-      font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+      font-family: var(--mono); font-size: 13px; letter-spacing: 0.12em;
       text-transform: uppercase; color: var(--ink-dim); font-weight: 500; line-height: 1.5; max-width: 16ch;
     }
 
@@ -594,8 +594,13 @@
       footer .brand-col { grid-column: 1 / -1; }
       nav.top .menu-pill { display: none; }
       .mission-stats { display: flex; flex-wrap: wrap; justify-content: center; }
-      .mstat { flex: 0 0 33.333%; border-left: 1px solid var(--border); padding: 26px 8px; }
-      .mission-stats .mstat:nth-child(1), .mission-stats .mstat:nth-child(4) { border-left: none; }
+      .mstat { flex: 0 0 40%; border-left: 1px solid var(--border); padding: 26px 8px; }
+      .mstat:nth-child(n+3) { flex-basis: 33.333%; }
+      .mission-stats .mstat:nth-child(1), .mission-stats .mstat:nth-child(3) { border-left: none; }
+      @media (max-width: 460px) {
+        .mstat { padding: 26px 6px; }
+        .mstat-l { font-size: 11px; letter-spacing: 0.08em; }
+      }
       .speakers-grid { grid-template-columns: 1fr; gap: 20px; }
       .speakers-intro { margin-left: 0; margin-top: 0; }
       .audience-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -947,11 +952,11 @@
       <p>We challenge the traditional, silo-centric "club" model by cultivating multi-stakeholder, SDG-aligned action plans that elevate student agency and transform extracurricular learning into something far more ambitious.</p>
     </div>
     <div class="mission-stats" id="mission-stats">
-      <div class="mstat"><div class="mstat-n" data-count="8">0</div><div class="mstat-l" style="font-size: 13px">Partner Institutions</div></div>
-      <div class="mstat"><div class="mstat-n" data-count="24">0</div><div class="mstat-l" style="font-size: 13px">Fellows &amp; Alumni</div></div>
-      <div class="mstat"><div class="mstat-n" data-count="6">0</div><div class="mstat-l" style="font-size: 13px">Countries Represented</div></div>
-      <div class="mstat"><div class="mstat-n" data-count="560">0</div><div class="mstat-l" style="font-size: 13px">People Served</div></div>
-      <div class="mstat"><div class="mstat-n">$0</div><div class="mstat-l" style="font-size: 13px">Cost for Every Fellow, Always</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="8">0</div><div class="mstat-l">Partner Institutions</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="24">0</div><div class="mstat-l">Fellows &amp; Alumni</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="6">0</div><div class="mstat-l">Countries Represented</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="560">0</div><div class="mstat-l">People Served</div></div>
+      <div class="mstat"><div class="mstat-n">$0</div><div class="mstat-l">Cost for Every Fellow, Always</div></div>
     </div>
   </div>
 </section>
@@ -1082,7 +1087,7 @@
       <div class="speaker-body">
         <h3>Anton Jongeneel</h3>
         <div class="speaker-role">UNITED STATES REP · UN SECURITY COUNCIL</div>
-        <p>Anton Jongeneel is a Columbia Law School graduate currently serving as a U.S. Political Advisor in the UN Security Council, where he leads strategy on the Ukraine conflict. Over a 13-year State Department career, he has served in places like the  DRC and Afghanistan. At UNbound, Anton will reframe everyday empathy as a catalyst of global change.</p>
+        <p>Anton Jongeneel is a Columbia Law School graduate currently serving as a U.S. Political Advisor in the UN Security Council, where he leads strategy on the Ukraine conflict. Over a 13-year State Department career, he has served in places like the DRC and Afghanistan. At UNbound, Anton will reframe everyday empathy as a catalyst of global change.</p>
       </div>
     </div>
     <div class="speaker-card">
