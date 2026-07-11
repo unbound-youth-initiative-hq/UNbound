@@ -1480,11 +1480,12 @@
     const track = document.getElementById('hc-track');
     if (!track) return;
     const total = track.children.length;
-    // The non-first slides are marked lazy so they don't compete with first paint;
-    // fetch them as soon as the page has finished loading so no slide is ever blank.
-    function warmSlides() { track.querySelectorAll('img[loading="lazy"]').forEach(im => { im.loading = 'eager'; }); }
-    if (document.readyState === 'complete') warmSlides();
-    else window.addEventListener('load', warmSlides);
+    // Lazy images (hero slides, speaker photos, diagrams) don't compete with first
+    // paint; fetch them all as soon as the page has finished loading so carousel
+    // slides are never blank and reveal animations never catch a half-loaded image.
+    function warmImages() { document.querySelectorAll('img[loading="lazy"]').forEach(im => { im.loading = 'eager'; }); }
+    if (document.readyState === 'complete') warmImages();
+    else window.addEventListener('load', warmImages);
     const dotsWrap = document.getElementById('hc-dots');
     let idx = 0, timer;
     for (let i = 0; i < total; i++) {
