@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /fellow-login.html
+Disallow: /fellow-dashboard.html
+Disallow: /fellowship-journey.html
+Disallow: /_test_narrow.html
+
+Sitemap: https://unboundyi.org/sitemap.xml
