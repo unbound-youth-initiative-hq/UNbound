@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
+# Virtual environment — never commit this (it's ~50MB of binaries)
+venv/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+
+# Environment secrets — API keys, passwords, etc.
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

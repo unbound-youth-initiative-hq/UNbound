@@ -1,0 +1,537 @@
+{% load static %}
+{% load socialaccount %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fellow Dashboard - UNbound</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="{% static 'dashboard.css' %}" />
+</head>
+<body data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}">
+  <aside class="sidebar" id="sidebar">
+    <a class="sb-brand" href="/" title="Back to UNbound.org">
+      <img src="{% static 'logo.png' %}" alt="UNbound" onerror="this.style.display='none'" />
+      <span class="wm">UNbound</span>
+    </a>
+    <nav class="sb-nav" id="sbNav" aria-label="Dashboard">
+      <button class="nav-item active" type="button" data-view="overview" onclick="showView('overview')">
+        <i class="fa-solid fa-house"></i> Workspace
+      </button>
+      <button class="nav-item" type="button" data-view="drive" onclick="showView('drive')">
+        <i class="fa-brands fa-google-drive"></i> Google Drive
+      </button>
+      <button class="nav-item" type="button" data-view="tasks" onclick="showView('tasks')">
+        <i class="fa-solid fa-list-check"></i> Tasks
+      </button>
+      <button class="nav-item" type="button" data-view="meetings" onclick="showView('meetings')">
+        <i class="fa-solid fa-calendar-check"></i> Meeting Hub
+      </button>
+      <button class="nav-item" type="button" data-view="badges" onclick="showView('badges')">
+        <i class="fa-solid fa-award"></i> Milestones & Achievements
+      </button>
+    </nav>
+    <div class="sb-foot">
+      <div class="sb-profile">
+        <div class="avatar">
+          {% if google_account.picture %}<img src="{{ google_account.picture }}" alt="" referrerpolicy="no-referrer" />{% else %}{{ request.user.username|slice:":2"|upper }}{% endif %}
+        </div>
+        <div class="who"><div class="nm">{{ google_account.name }}</div><div class="rl">{{ google_account.email }}</div></div>
+      </div>
+      <form class="sb-logout-form" method="post" action="{% url 'account_logout' %}">
+        {% csrf_token %}
+        <button class="sb-logout" type="submit"><i class="fa-solid fa-right-from-bracket"></i> Log out</button>
+      </form>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn mobile-menu" type="button" aria-label="Open menu" onclick="document.getElementById('sidebar').classList.toggle('open')">Menu</button>
+      <div class="spacer"></div>
+      <div class="top-account">
+        <div class="top-avatar">{% if google_account.picture %}<img src="{{ google_account.picture }}" alt="" referrerpolicy="no-referrer" />{% else %}G{% endif %}</div>
+        <span>{{ google_account.email }}</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- OVERVIEW / DASHBOARD -->
+      <section class="view active" id="view-overview">
+        <!-- Hero Welcome Header -->
+        <div class="dash-welcome-row">
+          <div>
+            <div class="eyebrow">FELLOW DASHBOARD</div>
+            <h1 class="welcome-title">Welcome back, <span id="dashFirstName">Fellow</span> 👋</h1>
+            <div class="dash-sub-line">
+              <span id="dashCohortName">Cohort 2026–2027</span> · You're in the <strong id="dashCurrentPhase">Launch Sequence</strong> phase
+            </div>
+          </div>
+          <button class="btn btn-primary btn-view-tasks" type="button" onclick="showView('tasks')">
+            <i class="fa-solid fa-plus"></i> View Tasks
+          </button>
+        </div>
+
+        <!-- Top Stat Cards (3 Columns) -->
+        <div class="dash-stat-grid">
+          <div class="dash-stat-card">
+            <div class="dash-stat-icon icon-cyan"><i class="fa-regular fa-square-check"></i></div>
+            <div class="dash-stat-label">Open Tasks</div>
+            <div class="dash-stat-value" id="dashOpenTasks">0</div>
+            <div class="dash-stat-sub">across team & personal</div>
+          </div>
+
+          <div class="dash-stat-card">
+            <div class="dash-stat-icon icon-green"><i class="fa-solid fa-check"></i></div>
+            <div class="dash-stat-label">Completed</div>
+            <div class="dash-stat-value" id="dashCompletedTasks">0</div>
+            <div class="dash-stat-sub">keep the momentum</div>
+          </div>
+
+          <div class="dash-stat-card">
+            <div class="dash-stat-icon icon-purple"><i class="fa-solid fa-ribbon"></i></div>
+            <div class="dash-stat-label">Badges Earned</div>
+            <div class="dash-stat-value"><span id="dashBadgesEarned">0</span> <span class="dim-slash">/ <span id="dashBadgesTotal">9</span></span></div>
+            <div class="dash-stat-sub" id="dashLevelName">Pioneer level</div>
+          </div>
+        </div>
+
+        <!-- Main Grid Layout -->
+        <div class="dash-main-grid">
+          <!-- LEFT MAIN STACK -->
+          <div class="dash-stack">
+            <!-- Dark Teal Project Banner Card -->
+            <div class="card project-banner-card">
+              <div class="eyebrow project-eyebrow">YOUR PROJECT</div>
+              <h2 class="project-title" id="dashProjectName">Bridges to Brighter Smiles</h2>
+              
+              <div class="project-meta-row">
+                <div class="meta-col">
+                  <div class="meta-label">CURRENT PHASE</div>
+                  <div class="meta-value phase-pill"><span class="rocket-emoji">🚀</span> <span id="dashBannerPhase">Launch Sequence</span></div>
+                </div>
+
+                <div class="meta-col">
+                  <div class="meta-label">CHAPTER</div>
+                  <div class="meta-value" id="dashChapter">Monterrey, MX</div>
+                </div>
+
+                <div class="meta-col">
+                  <div class="meta-label">TEAM</div>
+                  <div class="team-avatars-row" id="dashTeamAvatars">
+                    <!-- Dynamically populated Google Profile Pictures -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Fellowship Phases Tracker Card -->
+            <div class="card phases-tracker-card">
+              <div class="card-head-simple">
+                <i class="fa-solid fa-feather-pointed icon-cyan-text"></i>
+                <h3>Fellowship Phases</h3>
+              </div>
+
+              <div class="phases-pipeline">
+                <div class="phase-step completed" data-phase="Orbit of Ideas">
+                  <div class="step-line"></div>
+                  <div class="step-name">Orbit of Ideas</div>
+                  <div class="step-sub">Empathize</div>
+                </div>
+
+                <div class="phase-step active" data-phase="Launch Sequence">
+                  <div class="step-line"></div>
+                  <div class="step-name">Launch Sequence</div>
+                  <div class="step-sub">Ideate</div>
+                </div>
+
+                <div class="phase-step" data-phase="Mission Build">
+                  <div class="step-line"></div>
+                  <div class="step-name">Mission Build</div>
+                  <div class="step-sub">Prototype</div>
+                </div>
+
+                <div class="phase-step" data-phase="Trajectory">
+                  <div class="step-line"></div>
+                  <div class="step-name">Trajectory</div>
+                  <div class="step-sub">Test</div>
+                </div>
+
+                <div class="phase-step" data-phase="Touchdown">
+                  <div class="step-line"></div>
+                  <div class="step-name">Touchdown</div>
+                  <div class="step-sub">Impact</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SDGs Selected Card -->
+            <div class="card sdgs-card">
+              <div class="card-head-simple card-head-between">
+                <div class="card-title-left">
+                  <i class="fa-solid fa-globe icon-cyan-text"></i>
+                  <h3>SDGs Selected</h3>
+                </div>
+                <button class="btn btn-sm btn-ghost" id="btnOpenSdgModal">
+                  <i class="fa-solid fa-pen-to-square"></i> Edit SDGs
+                </button>
+              </div>
+
+              <div class="sdg-pills-row" id="dashSdgPills">
+                <!-- Dynamically populated SDG pills -->
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT SIDEBAR STACK -->
+          <div class="dash-sidebar-stack">
+            <!-- Overall Completion Card -->
+            <div class="card completion-card">
+              <div class="completion-head">
+                <div class="comp-title">
+                  <i class="fa-regular fa-circle-check icon-cyan-text"></i> Overall Completion
+                </div>
+                <div class="comp-value" id="dashCompletionPct">42%</div>
+              </div>
+
+              <div class="completion-bar-track">
+                <div class="completion-bar-fill" id="dashCompletionFill" style="width: 42%;"></div>
+              </div>
+
+              <div class="completion-sub-link" onclick="showView('tasks')">
+                <i class="fa-solid fa-arrow-right"></i> Click to revisit completed phases & meetings
+              </div>
+            </div>
+
+            <!-- Next Up Calendar Card -->
+            <div class="card nextup-card">
+              <div class="card-head-simple">
+                <i class="fa-regular fa-calendar-days icon-cyan-text"></i>
+                <h3>Next Up</h3>
+              </div>
+
+              <div class="nextup-list" id="dashNextUpList">
+                <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading upcoming events...</div>
+              </div>
+
+              <button class="btn btn-ghost w-100 btn-open-meetings" type="button" onclick="showView('meetings')">
+                Open Meeting Hub
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DUAL-SECTION GOOGLE DRIVE -->
+      <section class="view" id="view-drive">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow">Google Drive</div>
+            <h1>Document Center</h1>
+            <div class="sub">Access your personal project files and official shared workspace documents.</div>
+          </div>
+        </div>
+
+        <div class="drive-two-column-layout">
+          <!-- Column 1: Personal Files -->
+          <div class="card drive-column">
+            <div class="drive-col-header">
+              <div>
+                <h3><i class="fa-solid fa-folder-user"></i> Personal Drive Files</h3>
+                <div class="folder-status-pill" id="personalFolderStatus">
+                  <i class="fa-solid fa-clock-rotate-left"></i> Loading folder status...
+                </div>
+              </div>
+              <div class="drive-actions">
+                <button class="btn btn-sm btn-ghost" id="btnOpenFolderModal" title="Select or change Drive folder">
+                  <i class="fa-solid fa-folder-gear"></i> Select Folder
+                </button>
+                <button class="btn btn-sm btn-ghost" id="btnRefreshPersonal" title="Refresh">
+                  <i class="fa-solid fa-rotate-right"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="breadcrumbs" id="personalBreadcrumbs" style="display: none;"></div>
+
+            <div class="file-list-container" id="personalFileList">
+              <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading personal files...</div>
+            </div>
+          </div>
+
+          <!-- Column 2: Shared Workspace Files -->
+          <div class="card drive-column">
+            <div class="drive-col-header">
+              <div>
+                <h3><i class="fa-solid fa-users-gear"></i> Shared Workspace Docs</h3>
+                <div class="folder-status-pill shared-pill">
+                  <i class="fa-solid fa-shield-halved"></i> Official Cohort Resources
+                </div>
+              </div>
+              <button class="btn btn-sm btn-ghost" id="btnRefreshShared" title="Refresh">
+                <i class="fa-solid fa-rotate-right"></i>
+              </button>
+            </div>
+
+            <div class="file-list-container" id="sharedFileList">
+              <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading shared files...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WORKSPACE TASKS -->
+      <section class="view" id="view-tasks">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow">WORKSPACE</div>
+            <h1>Tasks</h1>
+            <div class="sub">Track team deliverables and your personal to-dos</div>
+          </div>
+          <button class="btn btn-ghost" type="button" id="btnToggleCompletedTasks">
+            <i class="fa-solid fa-check"></i> <span id="lblToggleTasks">View Completed Tasks</span>
+          </button>
+        </div>
+
+        <div class="tasks-sections-wrap">
+          <!-- SECTION 1: TEAM TASKS -->
+          <div class="task-section">
+            <div class="section-title-row">
+              <div class="sec-title-main">
+                <i class="fa-solid fa-users"></i>
+                <h2>Team Tasks</h2>
+                <span class="count-pill" id="teamTaskCountPill">0 open</span>
+              </div>
+            </div>
+
+            <div class="task-cards-list" id="teamTasksList">
+              <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading team deliverables...</div>
+            </div>
+
+            <form class="add-task-form" id="teamTaskForm">
+              <input type="text" id="inputTeamTaskTitle" placeholder="Add a team task..." maxlength="300" required />
+              <button class="btn btn-primary" type="submit">Add</button>
+            </form>
+          </div>
+
+          <!-- SECTION 2: YOUR TASKS -->
+          <div class="task-section">
+            <div class="section-title-row">
+              <div class="sec-title-main">
+                <i class="fa-solid fa-user"></i>
+                <h2>Your Tasks</h2>
+                <span class="count-pill" id="personalTaskCountPill">0 open</span>
+              </div>
+            </div>
+
+            <div class="task-cards-list" id="personalTasksList">
+              <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading personal tasks...</div>
+            </div>
+
+            <form class="add-task-form" id="personalTaskForm">
+              <input type="text" id="inputPersonalTaskTitle" placeholder="Add a personal task..." maxlength="300" required />
+              <button class="btn btn-primary" type="submit">Add</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- MEETING HUB WITH INTEGRATED GOOGLE CALENDAR -->
+      <section class="view" id="view-meetings">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow">SCHEDULING</div>
+            <h1>Meeting Hub</h1>
+            <div class="sub">Mark your availability — the group view updates as your team responds</div>
+          </div>
+          <div class="meeting-top-actions">
+            <button class="btn btn-primary" type="button" id="btnSyncGoogleCalendar">
+              <i class="fa-brands fa-google"></i> Sync with Google Calendar
+            </button>
+          </div>
+        </div>
+
+        <div class="meeting-controls-bar">
+          <div class="tz-selector-wrap">
+            <label for="tzSelect" class="tz-label">Your Time Zone:</label>
+            <select id="tzSelect" class="tz-select">
+              <option value="America/Monterrey" selected>America/Monterrey (CT)</option>
+              <option value="America/New_York">America/New_York (ET)</option>
+              <option value="America/Los_Angeles">America/Los_Angeles (PT)</option>
+              <option value="Europe/London">Europe/London (GMT)</option>
+              <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+              <option value="UTC">UTC (Coordinated Universal Time)</option>
+            </select>
+          </div>
+
+          <div class="availability-legend">
+            <div class="legend-item"><span class="legend-box unavailable-box"></span> Unavailable</div>
+            <div class="legend-item"><span class="legend-box available-box"></span> Available</div>
+          </div>
+        </div>
+
+        <div class="meeting-two-column-layout">
+          <!-- Column 1: User's Availability -->
+          <div class="card meeting-column">
+            <div class="meeting-col-header">
+              <div>
+                <h3 id="myAvailabilityTitle">My Availability</h3>
+                <div class="meeting-col-sub">Click & drag to toggle — saved instantly</div>
+              </div>
+              <div class="meeting-col-actions">
+                <button class="btn btn-sm btn-ghost" id="btnClearMyAvailability" title="Clear all my slots">
+                  <i class="fa-solid fa-eraser"></i> Clear
+                </button>
+              </div>
+            </div>
+
+            <div class="grid-table-wrapper">
+              <div class="availability-grid" id="myAvailabilityGrid">
+                <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading availability grid...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: Group's Availability -->
+          <div class="card meeting-column">
+            <div class="meeting-col-header">
+              <div>
+                <h3>Group's Availability</h3>
+                <div class="meeting-col-sub">Darker cyan means more of the team is free</div>
+              </div>
+              <div class="meeting-col-actions">
+                <button class="btn btn-sm btn-ghost" id="btnRefreshGroupAvailability" title="Refresh group heatmap">
+                  <i class="fa-solid fa-rotate-right"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="grid-table-wrapper">
+              <div class="availability-grid" id="groupAvailabilityGrid">
+                <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading group availability heatmap...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Integrated Google Calendar Card Below Availability -->
+        <div class="card meeting-calendar-card" style="margin-top: 24px;">
+          <div class="meeting-col-header">
+            <div>
+              <h3><i class="fa-solid fa-calendar-days" style="color: var(--accent);"></i> Upcoming Google Calendar Events</h3>
+              <div class="meeting-col-sub">Your upcoming events synced from your primary Google Calendar</div>
+            </div>
+            <div class="meeting-col-actions">
+              <button class="btn btn-sm btn-ghost" type="button" onclick="loadCalendar('calendarEvents')">
+                <i class="fa-solid fa-rotate-right"></i> Refresh Events
+              </button>
+            </div>
+          </div>
+
+          <div class="event-list" id="calendarEvents">
+            <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading calendar events...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MILESTONES & ACHIEVEMENTS -->
+      <section class="view" id="view-badges">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow">PROGRESS</div>
+            <h1>Milestones & Achievements</h1>
+            <div class="sub">Earn badges as you move through the Fellowship</div>
+          </div>
+        </div>
+
+        <!-- Top Progress Banner -->
+        <div class="badges-level-banner" id="badgesBanner">
+          <div class="banner-ring-box">
+            <div class="ring-number" id="bannerRingNumber">0</div>
+            <div class="ring-label">of <span id="bannerRingTotal">9</span></div>
+          </div>
+          <div class="banner-info">
+            <h2 id="bannerLevelTitle">Pioneer • Level 1</h2>
+            <p id="bannerLevelSub">Complete tasks and sync availability to unlock badges and earn XP.</p>
+            <div class="banner-progress-track">
+              <div class="banner-progress-fill" id="bannerProgressFill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Badges Grid -->
+        <div class="badges-grid" id="badgesGrid">
+          <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading milestones...</div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- FOLDER SELECTION MODAL -->
+  <div class="modal-overlay" id="folderModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Link Google Drive Folder</h3>
+        <button class="btn-icon" id="btnCloseFolderModal">&times;</button>
+      </div>
+
+      <div class="modal-tabs">
+        <button class="tab-btn active" data-tab="tab-select">Choose Folder</button>
+        <button class="tab-btn" data-tab="tab-link">Paste Link or ID</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="tab-content active" id="tab-select">
+          <div class="folder-select-list" id="folderSelectList">
+            <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Fetching folders...</div>
+          </div>
+        </div>
+
+        <div class="tab-content" id="tab-link">
+          <p class="help-text">Paste a Google Drive folder link or folder ID below:</p>
+          <input type="text" id="inputFolderLink" class="input-field" placeholder="https://drive.google.com/drive/folders/..." />
+          <button class="btn btn-primary" id="btnSaveCustomFolder">Link Folder</button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost danger-ghost" id="btnUnlinkFolder">Unlink Current Folder</button>
+        <button class="btn btn-ghost" id="btnCancelModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SDG SELECTION MODAL -->
+  <div class="modal-overlay" id="sdgModal">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3>Select UN Sustainable Development Goals</h3>
+          <p class="modal-subtext">Choose the official UN SDGs that align with your cohort's project.</p>
+        </div>
+        <button class="btn-icon" id="btnCloseSdgModal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="sdg-picker-grid" id="sdgPickerGrid">
+          <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading UN goals...</div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span class="selected-count-label" id="sdgSelectedCount">0 selected</span>
+        <div class="modal-footer-btns">
+          <button class="btn btn-ghost" id="btnCancelSdgModal">Cancel</button>
+          <button class="btn btn-primary" id="btnSaveSdgs">Save SDGs</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="{% static 'dashboard.js' %}"></script>
+</body>
+</html>
