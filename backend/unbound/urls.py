@@ -32,4 +32,5 @@ urlpatterns = [
     path('dashboard/', views.dashboard_view, name='dashboard'),
 
     path('api/dashboard/overview/', views.DashboardOverviewAPIView.as_view(), name='dashboard-overview-api'),
+    path('api/dashboard/preferences/', views.DashboardPreferencesAPIView.as_view(), name='dashboard-preferences-api'),
 ]

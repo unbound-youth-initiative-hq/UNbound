@@ -6,6 +6,7 @@ from allauth.socialaccount.models import SocialAccount
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -16,6 +17,7 @@ from .google_api import (
     create_google_task,
     delete_google_task,
     fetch_calendar_events,
+    fetch_calendar_events_in_range,
     fetch_user_drive_folders,
     fetch_drive_folder_contents,
     fetch_shared_workspace_files,
@@ -27,8 +29,11 @@ from .google_api import (
     sync_user_calendar_availability,
     fetch_shared_calendar_events_in_range,
 )
-from .models import MeetingAvailability, Task, Fellow, FellowBadge, InviteCode, SDG, Cohort
-from .serializers import MeetingAvailabilitySerializer, TaskSerializer
+from .models import (
+    MeetingAvailability, Task, Fellow, FellowBadge, InviteCode, SDG, Cohort,
+    AvailabilityRequest, availability_task_visibility_filter,
+)
+from .serializers import MeetingAvailabilitySerializer, TaskSerializer, AvailabilityRequestSerializer
 from .badges_engine import evaluate_and_sync_badges
 
 
@@ -72,8 +77,10 @@ def google_account_details(user):
 @login_required(login_url='account_login')
 def dashboard_view(request):
     """Render the dashboard shell; each Google mini-app loads live data via API."""
+    fellow = getattr(request.user, 'fellow_profile', None)
     return render(request, 'fellow-dashboard.html', {
         'google_account': google_account_details(request.user),
+        'accent_palette': fellow.accent_palette if fellow else Fellow.AccentPalette.OCEAN,
     })
 
 
@@ -133,7 +140,37 @@ class GoogleCalendarEventsView(GoogleConnectionAPIView):
         if disconnected:
             return disconnected
         try:
-            return Response({'connected': True, 'events': fetch_calendar_events(request.user)})
+            time_min = request.query_params.get('time_min')
+            time_max = request.query_params.get('time_max')
+            if bool(time_min) != bool(time_max):
+                return Response(
+                    {'connected': True, 'detail': 'Both time_min and time_max are required for a date range.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if time_min and time_max:
+                try:
+                    range_start = datetime.fromisoformat(time_min.replace('Z', '+00:00'))
+                    range_end = datetime.fromisoformat(time_max.replace('Z', '+00:00'))
+                except ValueError:
+                    return Response(
+                        {'connected': True, 'detail': 'Calendar date ranges must use ISO 8601 timestamps.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if (
+                    range_start.tzinfo is None or range_start.utcoffset() is None
+                    or range_end.tzinfo is None or range_end.utcoffset() is None
+                    or range_end <= range_start
+                    or range_end - range_start > timedelta(days=366)
+                ):
+                    return Response(
+                        {'connected': True, 'detail': 'The calendar date range is invalid or too long.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                events = fetch_calendar_events_in_range(request.user, time_min, time_max)
+            else:
+                events = fetch_calendar_events(request.user)
+            return Response({'connected': True, 'events': events})
         except GoogleIntegrationError as exc:
             return self.integration_error_response(exc)
 
@@ -397,7 +434,9 @@ class BadgesAPIView(APIView):
 
 def seed_initial_prototype_tasks(fellow):
     """Seed prototype tasks matching the design spec if fellow has no tasks."""
-    if Task.objects.filter(assigned_to=fellow).exists():
+    if Task.objects.filter(assigned_to=fellow).filter(
+        availability_task_visibility_filter(fellow)
+    ).exists():
         return
 
     prototype_deliverables = [
@@ -464,7 +503,9 @@ class TaskViewSet(viewsets.ModelViewSet):
         else:
             qs = Task.objects.filter(assigned_to=fellow)
 
-        return qs.order_by('-created_at')
+        return qs.filter(
+            availability_task_visibility_filter(fellow)
+        ).order_by('-created_at')
 
     def perform_create(self, serializer):
         fellow = self.request.user.fellow_profile
@@ -505,11 +546,54 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
         if not hasattr(self.request.user, 'fellow_profile'):
             return MeetingAvailability.objects.none()
         fellow = self.request.user.fellow_profile
-        return MeetingAvailability.objects.filter(fellow=fellow)
+        slots = MeetingAvailability.objects.filter(fellow=fellow)
+        req_id = self.request.query_params.get('request_id')
+        if req_id:
+            try:
+                avail_request = AvailabilityRequest.objects.filter(
+                    pk=int(req_id),
+                    is_active=True,
+                ).first()
+            except (TypeError, ValueError):
+                avail_request = None
+            if not avail_request or not avail_request.target_fellows().filter(pk=fellow.pk).exists():
+                return MeetingAvailability.objects.none()
+            return slots.filter(availability_request=avail_request)
+        return slots.filter(
+            availability_task_visibility_filter(fellow)
+        )
 
     def perform_create(self, serializer):
-        serializer.save(fellow=self.request.user.fellow_profile)
+        fellow = self.request.user.fellow_profile
+        avail_request = serializer.validated_data.get('availability_request')
+        if avail_request and (
+            not avail_request.is_active
+            or not avail_request.target_fellows().filter(pk=fellow.pk).exists()
+        ):
+            raise ValidationError({
+                'availability_request': 'This request is inactive or is not assigned to you.'
+            })
+        serializer.save(fellow=fellow)
         evaluate_and_sync_badges(self.request.user.fellow_profile)
+
+    @action(detail=False, methods=['get'], url_path='requests')
+    def requests(self, request):
+        """Returns all active When to Meet availability requests relevant to the current fellow."""
+        if not hasattr(request.user, 'fellow_profile'):
+            return Response({'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        fellow = request.user.fellow_profile
+        if fellow.role != Fellow.Role.FELLOW or not request.user.is_active:
+            return Response({'status': 'success', 'requests': []})
+
+        qs = AvailabilityRequest.objects.filter(is_active=True)
+        if fellow.cohort:
+            qs = qs.filter(Q(assign_to_all=True) | Q(cohort=fellow.cohort) | Q(cohort__isnull=True))
+        else:
+            qs = qs.filter(Q(assign_to_all=True) | Q(cohort__isnull=True))
+
+        serializer = AvailabilityRequestSerializer(qs.order_by('-created_at'), many=True, context={'request': request})
+        return Response({'status': 'success', 'requests': serializer.data})
 
     @action(detail=False, methods=['post'], url_path='bulk-save')
     def bulk_save(self, request):
@@ -518,14 +602,52 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
 
         fellow = request.user.fellow_profile
         slots = request.data.get('slots', [])
+        req_id = request.data.get('request_id')
+
+        avail_request = None
+        if req_id:
+            try:
+                avail_request = AvailabilityRequest.objects.filter(
+                    pk=int(req_id),
+                    is_active=True,
+                ).first()
+            except (TypeError, ValueError):
+                avail_request = None
+            if (
+                not avail_request
+                or fellow.role != Fellow.Role.FELLOW
+                or not avail_request.target_fellows().filter(pk=fellow.pk).exists()
+            ):
+                return Response(
+                    {'detail': 'Active availability request not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
         updated_records = []
         for s in slots:
+            date_str = s.get('date')
             day = s.get('day_of_week')
             hour = s.get('hour')
             is_avail = bool(s.get('is_available', False))
 
-            if day is not None and hour is not None:
+            if hour is None:
+                continue
+
+            if avail_request and date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    continue
+                dow = (date_obj.weekday() + 1) % 7
+                obj, _ = MeetingAvailability.objects.update_or_create(
+                    availability_request=avail_request,
+                    fellow=fellow,
+                    date=date_obj,
+                    hour=hour,
+                    defaults={'day_of_week': dow, 'is_available': is_avail}
+                )
+                updated_records.append(obj)
+            elif day is not None:
                 obj, _ = MeetingAvailability.objects.update_or_create(
                     fellow=fellow,
                     day_of_week=day,
@@ -533,6 +655,13 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
                     defaults={'is_available': is_avail}
                 )
                 updated_records.append(obj)
+
+        if avail_request:
+            # Mark the auto-assigned task for this request as complete
+            Task.objects.filter(
+                assigned_to=fellow,
+                availability_request=avail_request
+            ).update(status=Task.Status.COMPLETE)
 
         evaluate_and_sync_badges(fellow)
         serializer = self.get_serializer(updated_records, many=True)
@@ -547,8 +676,28 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_403_FORBIDDEN)
 
         tz_str = request.data.get('timezone', 'America/Monterrey')
+        req_id = request.data.get('request_id')
+        fellow = getattr(request.user, 'fellow_profile', None)
+        if req_id:
+            try:
+                avail_request = AvailabilityRequest.objects.filter(
+                    pk=int(req_id),
+                    is_active=True,
+                ).first()
+            except (TypeError, ValueError):
+                avail_request = None
+            if (
+                not avail_request
+                or not fellow
+                or fellow.role != Fellow.Role.FELLOW
+                or not avail_request.target_fellows().filter(pk=fellow.pk).exists()
+            ):
+                return Response(
+                    {'detail': 'Active availability request not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
         try:
-            slots = sync_user_calendar_availability(request.user, tz_str=tz_str)
+            slots = sync_user_calendar_availability(request.user, tz_str=tz_str, request_id=req_id)
             if hasattr(request.user, 'fellow_profile'):
                 evaluate_and_sync_badges(request.user.fellow_profile)
             return Response({'connected': True, 'status': 'success', 'slots': slots})
@@ -561,20 +710,159 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
 
         fellow = request.user.fellow_profile
+        req_id = request.query_params.get('request_id')
+        tz_str = request.query_params.get('timezone', 'America/Monterrey')
 
-        if fellow.cohort:
-            cohort_fellows = Fellow.objects.filter(cohort=fellow.cohort).select_related('user')
-        elif fellow.chapter:
-            cohort_fellows = Fellow.objects.filter(chapter=fellow.chapter).select_related('user')
-        else:
-            cohort_fellows = Fellow.objects.select_related('user').all()
+        avail_request = None
+        if req_id:
+            try:
+                avail_request = AvailabilityRequest.objects.filter(
+                    pk=int(req_id),
+                    is_active=True,
+                ).first()
+            except (TypeError, ValueError):
+                avail_request = None
+            if (
+                not avail_request
+                or fellow.role != Fellow.Role.FELLOW
+                or not avail_request.target_fellows().filter(pk=fellow.pk).exists()
+            ):
+                return Response(
+                    {'detail': 'Active availability request not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-        total_members = cohort_fellows.count()
-        if total_members == 0:
-            total_members = 1
+        try:
+            tz = ZoneInfo(tz_str)
+        except Exception:
+            tz = ZoneInfo('America/Monterrey')
 
+        shared_email = getattr(settings, 'GOOGLE_SHARED_WORKSPACE_EMAIL', 'primary')
+
+        if avail_request:
+            active_fellows = Fellow.objects.filter(
+                role=Fellow.Role.FELLOW,
+                user__is_active=True,
+            ).select_related('user')
+            if not avail_request.assign_to_all and avail_request.cohort_id:
+                cohort_fellows = avail_request.target_fellows()
+            elif fellow.cohort_id:
+                cohort_fellows = active_fellows.filter(cohort_id=fellow.cohort_id)
+            else:
+                cohort_fellows = avail_request.target_fellows()
+
+            total_members = max(1, cohort_fellows.count())
+
+            avail_qs = MeetingAvailability.objects.filter(
+                availability_request=avail_request,
+                fellow__in=cohort_fellows,
+                is_available=True
+            ).select_related('fellow__user')
+
+            start_d = avail_request.start_date
+            end_d = avail_request.end_date
+            num_days = (end_d - start_d).days + 1
+            dates_list = [start_d + timedelta(days=i) for i in range(num_days)]
+            start_hour = avail_request.start_hour
+            end_hour = avail_request.end_hour
+
+            matrix_data = {(d.isoformat(), h): [] for d in dates_list for h in range(start_hour, end_hour)}
+            for record in avail_qs:
+                if record.date:
+                    key = (record.date.isoformat(), record.hour)
+                    if key in matrix_data:
+                        name = record.fellow.user.get_full_name() or record.fellow.user.username
+                        matrix_data[key].append(name)
+
+            shared_events_grid = {}
+            if has_google_connection(request.user):
+                s_window = datetime.combine(start_d, datetime.min.time(), tzinfo=tz)
+                e_window = datetime.combine(end_d + timedelta(days=1), datetime.min.time(), tzinfo=tz)
+                shared_events = fetch_shared_calendar_events_in_range(
+                    request.user,
+                    shared_email=shared_email,
+                    time_min=s_window.isoformat(),
+                    time_max=e_window.isoformat()
+                )
+                for ev in shared_events:
+                    if ev.get('transparency') == 'transparent':
+                        continue
+                    start_raw = ev.get('start', {})
+                    end_raw = ev.get('end', {})
+                    if 'dateTime' in start_raw:
+                        ev_s = datetime.fromisoformat(start_raw['dateTime'])
+                    elif 'date' in start_raw:
+                        ev_s = datetime.strptime(start_raw['date'], '%Y-%m-%d').replace(tzinfo=tz)
+                    else:
+                        continue
+                    if 'dateTime' in end_raw:
+                        ev_e = datetime.fromisoformat(end_raw['dateTime'])
+                    elif 'date' in end_raw:
+                        ev_e = datetime.strptime(end_raw['date'], '%Y-%m-%d').replace(tzinfo=tz)
+                    else:
+                        continue
+
+                    for day_date in dates_list:
+                        day_iso = day_date.isoformat()
+                        for h in range(start_hour, end_hour):
+                            slot_start = datetime.combine(day_date, datetime.min.time(), tzinfo=tz).replace(hour=h)
+                            slot_end = slot_start + timedelta(hours=1)
+                            if ev_s < slot_end and ev_e > slot_start:
+                                shared_events_grid[(day_iso, h)] = ev.get('summary', 'Shared Group Event')
+
+            formatted_matrix = []
+            today_date = datetime.now(tz).date()
+            for (date_iso, h), available_names in matrix_data.items():
+                count = len(available_names)
+                pct = round((count / total_members) * 100) if total_members > 0 else 0
+                formatted_matrix.append({
+                    'date': date_iso,
+                    'hour': h,
+                    'available_count': count,
+                    'total_members': total_members,
+                    'percentage': pct,
+                    'available_members': available_names,
+                    'group_event': shared_events_grid.get((date_iso, h))
+                })
+
+            dates_info = [
+                {
+                    'date': d.isoformat(),
+                    'dayName': d.strftime('%a'),
+                    'monthName': d.strftime('%b'),
+                    'dayNum': d.day,
+                    'dayOfWeek': (d.weekday() + 1) % 7,
+                    'isToday': (d == today_date)
+                }
+                for d in dates_list
+            ]
+
+            return Response({
+                'status': 'success',
+                'is_request': True,
+                'request': AvailabilityRequestSerializer(avail_request, context={'request': request}).data,
+                'total_members': total_members,
+                'dates': dates_info,
+                'matrix': formatted_matrix,
+                'start_hour': start_hour,
+                'end_hour': end_hour
+            })
+
+        # Legacy 7-day rolling window fallback uses only current fellows and
+        # legacy slots; request-specific responses stay with their request.
+        cohort_fellows = Fellow.objects.filter(
+            role=Fellow.Role.FELLOW,
+            user__is_active=True,
+        ).select_related('user')
+        if fellow.cohort_id:
+            cohort_fellows = cohort_fellows.filter(cohort_id=fellow.cohort_id)
+        elif fellow.chapter_id:
+            cohort_fellows = cohort_fellows.filter(chapter_id=fellow.chapter_id)
+
+        total_members = max(1, cohort_fellows.count())
         avail_qs = MeetingAvailability.objects.filter(
             fellow__in=cohort_fellows,
+            availability_request__isnull=True,
             is_available=True
         ).select_related('fellow__user')
 
@@ -585,15 +873,8 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
                 name = record.fellow.user.get_full_name() or record.fellow.user.username
                 matrix_data[key].append(name)
 
-        tz_str = request.query_params.get('timezone', 'America/Monterrey')
-        shared_email = getattr(settings, 'GOOGLE_SHARED_WORKSPACE_EMAIL', 'primary')
         shared_events_grid = {}
-
         if has_google_connection(request.user):
-            try:
-                tz = ZoneInfo(tz_str)
-            except Exception:
-                tz = ZoneInfo('America/Monterrey')
             now = datetime.now(tz)
             s_window = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
             e_window = s_window + timedelta(days=7)
@@ -648,9 +929,36 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
 
         return Response({
             'status': 'success',
+            'is_request': False,
             'total_members': total_members,
             'matrix': formatted_matrix
         })
+
+
+class DashboardPreferencesAPIView(APIView):
+    """Read and update the signed-in fellow's small set of dashboard preferences."""
+
+    def get(self, request, *args, **kwargs):
+        fellow = getattr(request.user, 'fellow_profile', None)
+        if fellow is None:
+            return Response({'status': 'error', 'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'status': 'success', 'accent_palette': fellow.accent_palette})
+
+    def patch(self, request, *args, **kwargs):
+        fellow = getattr(request.user, 'fellow_profile', None)
+        if fellow is None:
+            return Response({'status': 'error', 'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        palette = request.data.get('accent_palette')
+        if palette not in Fellow.AccentPalette.values:
+            return Response(
+                {'status': 'error', 'detail': 'Choose one of the available accent palettes.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        fellow.accent_palette = palette
+        fellow.save(update_fields=['accent_palette'])
+        return Response({'status': 'success', 'accent_palette': fellow.accent_palette})
 
 
 class DashboardOverviewAPIView(APIView):
@@ -724,6 +1032,9 @@ class DashboardOverviewAPIView(APIView):
         else:
             tasks_qs = Task.objects.filter(assigned_to=fellow)
 
+        tasks_qs = tasks_qs.filter(
+            availability_task_visibility_filter(fellow)
+        )
         open_tasks = tasks_qs.exclude(status=Task.Status.COMPLETE).count()
         completed_tasks = tasks_qs.filter(status=Task.Status.COMPLETE).count()
         total_tasks = tasks_qs.count()

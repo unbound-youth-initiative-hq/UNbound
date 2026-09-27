@@ -1,0 +1,42 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h1>Assign a task</h1>
+  <p>Assignments created here are marked as assigned by UNbound. Individual mode creates one task per fellow; team mode creates one shared task per cohort.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {{ form.title.errors }}<p>{{ form.title.label_tag }} {{ form.title }}</p>
+    {{ form.description.errors }}<p>{{ form.description.label_tag }} {{ form.description }}</p>
+    {{ form.target_mode.errors }}<p>{{ form.target_mode.label_tag }} {{ form.target_mode }}</p>
+    <p id="fellow-target-row">{{ form.fellow.errors }}{{ form.fellow.label_tag }} {{ form.fellow }}</p>
+    <p id="cohort-target-row">{{ form.cohort.errors }}{{ form.cohort.label_tag }} {{ form.cohort }}</p>
+    {{ form.due_date.errors }}<p>{{ form.due_date.label_tag }} {{ form.due_date }}<br>{{ form.due_date.help_text }}</p>
+    <div class="submit-row">
+      <input type="submit" value="Create assignment" class="default">
+      <a href="{% url 'admin:fellows_task_changelist' %}" class="closelink">Cancel</a>
+    </div>
+  </form>
+  <script>
+    (function () {
+      const mode = document.getElementById("id_target_mode");
+      const fellowRow = document.getElementById("fellow-target-row");
+      const cohortRow = document.getElementById("cohort-target-row");
+      const fellow = document.getElementById("id_fellow");
+      const cohort = document.getElementById("id_cohort");
+
+      function updateTargetFields() {
+        const value = mode.value;
+        const showFellow = value === "fellow";
+        const showCohort = value === "cohort_individual" || value === "cohort_team";
+        fellowRow.hidden = !showFellow;
+        cohortRow.hidden = !showCohort;
+        if (!showFellow) fellow.value = "";
+        if (!showCohort) cohort.value = "";
+      }
+
+      mode.addEventListener("change", updateTargetFields);
+      updateTargetFields();
+    })();
+  </script>
+{% endblock %}

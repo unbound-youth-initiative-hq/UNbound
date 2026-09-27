@@ -1,4 +1,5 @@
 import logging
+import unicodedata
 import google.auth.transport.requests
 from django.utils import timezone
 from django.conf import settings
@@ -82,17 +83,49 @@ def _api_error(action, exc):
     raise GoogleIntegrationError('Google could not complete that request. Please try again.') from exc
 
 
+def _deduplicate_all_day_events(events):
+    """Collapse all-day events that would render as the same visible entry."""
+    seen = set()
+    deduplicated = []
+    for event in events:
+        start = event.get('start') or {}
+        event_date = start.get('date')
+        if not event_date:
+            deduplicated.append(event)
+            continue
+
+        title = unicodedata.normalize('NFKC', str(event.get('summary') or ''))
+        title = ' '.join(title.split()).casefold()
+        key = (event_date, title)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append(event)
+    return deduplicated
+
+
 def fetch_calendar_events(user, limit=10):
     try:
+        now = timezone.localtime(timezone.now())
+        start_of_next_year = now.replace(
+            year=now.year + 1,
+            month=1,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
         result = _google_service('calendar', 'v3', user).events().list(
             calendarId='primary',
-            timeMin=timezone.now().isoformat(),
+            timeMin=now.isoformat(),
+            timeMax=start_of_next_year.isoformat(),
             maxResults=limit,
             singleEvents=True,
             orderBy='startTime',
             fields='items(id,summary,start,end,location,htmlLink)',
         ).execute()
-        return result.get('items', [])
+        return _deduplicate_all_day_events(result.get('items', []))
     except GoogleIntegrationError:
         raise
     except Exception as exc:
@@ -103,15 +136,25 @@ def fetch_calendar_events_in_range(user, time_min, time_max):
     """Fetch events from user's primary Google Calendar between time_min and time_max."""
     try:
         service = _google_service('calendar', 'v3', user)
-        events_result = service.events().list(
-            calendarId='primary',
-            timeMin=time_min,
-            timeMax=time_max,
-            singleEvents=True,
-            orderBy='startTime',
-            fields='items(id,summary,start,end,transparency,location,htmlLink)',
-        ).execute()
-        return events_result.get('items', [])
+        events = []
+        page_token = None
+        while True:
+            request_args = {
+                'calendarId': 'primary',
+                'timeMin': time_min,
+                'timeMax': time_max,
+                'singleEvents': True,
+                'orderBy': 'startTime',
+                'maxResults': 2500,
+                'fields': 'items(id,summary,start,end,transparency,location,htmlLink),nextPageToken',
+            }
+            if page_token:
+                request_args['pageToken'] = page_token
+            events_result = service.events().list(**request_args).execute()
+            events.extend(events_result.get('items', []))
+            page_token = events_result.get('nextPageToken')
+            if not page_token:
+                return events
     except GoogleIntegrationError:
         raise
     except Exception as exc:
@@ -137,12 +180,13 @@ def fetch_shared_calendar_events_in_range(user, shared_email=None, time_min=None
         return []
 
 
-def sync_user_calendar_availability(user, tz_str='America/Monterrey'):
+def sync_user_calendar_availability(user, tz_str='America/Monterrey', request_id=None):
     """
-    Syncs the user's primary Google Calendar events for a 7-day rolling window
-    (starting 1 day in the past / yesterday) into MeetingAvailability records.
+    Syncs the user's primary Google Calendar events into MeetingAvailability records.
+    If request_id is provided, syncs for the exact date range [start_date, end_date] of the AvailabilityRequest.
+    Otherwise falls back to a 7-day rolling window for backwards compatibility.
     """
-    from .models import MeetingAvailability
+    from .models import MeetingAvailability, AvailabilityRequest, Task
 
     fellow = getattr(user, 'fellow_profile', None)
     if not fellow:
@@ -153,10 +197,25 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey'):
     except Exception:
         tz = ZoneInfo('America/Monterrey')
 
-    now = datetime.now(tz)
-    # Start 1 day in the past (yesterday at 00:00:00)
-    start_of_window = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_window = start_of_window + timedelta(days=7)
+    avail_request = None
+    if request_id:
+        avail_request = AvailabilityRequest.objects.filter(id=request_id).first()
+
+    if avail_request:
+        start_of_window = datetime.combine(avail_request.start_date, datetime.min.time(), tzinfo=tz)
+        end_of_window = datetime.combine(avail_request.end_date + timedelta(days=1), datetime.min.time(), tzinfo=tz)
+        start_hour = avail_request.start_hour
+        end_hour = avail_request.end_hour
+        num_days = (avail_request.end_date - avail_request.start_date).days + 1
+        base_date = avail_request.start_date
+    else:
+        now = datetime.now(tz)
+        start_of_window = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_window = start_of_window + timedelta(days=7)
+        start_hour = 9
+        end_hour = 18
+        num_days = 7
+        base_date = start_of_window.date()
 
     events = fetch_calendar_events_in_range(
         user,
@@ -167,7 +226,7 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey'):
     busy_intervals = []
     for ev in events:
         if ev.get('transparency') == 'transparent':
-            continue  # Skip 'free' events
+            continue
 
         start_raw = ev.get('start', {})
         end_raw = ev.get('end', {})
@@ -189,12 +248,12 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey'):
         busy_intervals.append((ev_start, ev_end))
 
     updated_slots = []
-    for day_idx in range(7):
-        day_date = start_of_window + timedelta(days=day_idx)
-        dow_code = (day_date.weekday() + 1) % 7 # 0 = Sun, 1 = Mon, ..., 6 = Sat
+    for day_idx in range(num_days):
+        current_date = base_date + timedelta(days=day_idx)
+        dow_code = (current_date.weekday() + 1) % 7
 
-        for h in range(9, 18):
-            slot_start = day_date.replace(hour=h, minute=0, second=0, microsecond=0)
+        for h in range(start_hour, end_hour):
+            slot_start = datetime.combine(current_date, datetime.min.time(), tzinfo=tz).replace(hour=h)
             slot_end = slot_start + timedelta(hours=1)
 
             is_busy = False
@@ -203,17 +262,39 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey'):
                     is_busy = True
                     break
 
-            slot, _ = MeetingAvailability.objects.update_or_create(
-                fellow=fellow,
-                day_of_week=dow_code,
-                hour=h,
-                defaults={'is_available': not is_busy}
-            )
-            updated_slots.append({
-                'day_of_week': slot.day_of_week,
-                'hour': slot.hour,
-                'is_available': slot.is_available
-            })
+            if avail_request:
+                slot, _ = MeetingAvailability.objects.update_or_create(
+                    availability_request=avail_request,
+                    fellow=fellow,
+                    date=current_date,
+                    hour=h,
+                    defaults={'day_of_week': dow_code, 'is_available': not is_busy}
+                )
+                updated_slots.append({
+                    'id': slot.id,
+                    'date': slot.date.isoformat(),
+                    'day_of_week': slot.day_of_week,
+                    'hour': slot.hour,
+                    'is_available': slot.is_available
+                })
+            else:
+                slot, _ = MeetingAvailability.objects.update_or_create(
+                    fellow=fellow,
+                    day_of_week=dow_code,
+                    hour=h,
+                    defaults={'is_available': not is_busy}
+                )
+                updated_slots.append({
+                    'day_of_week': slot.day_of_week,
+                    'hour': slot.hour,
+                    'is_available': slot.is_available
+                })
+
+    if avail_request:
+        Task.objects.filter(
+            assigned_to=fellow,
+            availability_request=avail_request
+        ).update(status=Task.Status.COMPLETE)
 
     return updated_slots
 

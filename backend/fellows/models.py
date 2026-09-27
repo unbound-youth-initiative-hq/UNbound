@@ -107,10 +107,25 @@ class InviteCode(models.Model):
 
 
 class Fellow(models.Model):
+    class AccentPalette(models.TextChoices):
+        OCEAN = 'ocean', 'Ocean'
+        SKY = 'sky', 'Sky'
+        CORAL = 'coral', 'Coral'
+        VIOLET = 'violet', 'Violet'
+        MINT = 'mint', 'Mint'
+        FOREST = 'forest', 'Forest'
+        ROSE = 'rose', 'Rose'
+        AMBER = 'amber', 'Amber'
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='fellow_profile'
+    )
+    accent_palette = models.CharField(
+        max_length=12,
+        choices=AccentPalette.choices,
+        default=AccentPalette.OCEAN,
     )
     chapter = models.ForeignKey(
         Chapter,
@@ -164,6 +179,30 @@ class Fellow(models.Model):
         ordering = ['user__last_name', 'user__first_name']
 
 
+def availability_task_visibility_filter(fellow):
+    """Return a Task queryset filter for availability requests visible to this fellow."""
+    if (
+        not fellow
+        or fellow.role != Fellow.Role.FELLOW
+        or not fellow.user.is_active
+    ):
+        return models.Q(availability_request__isnull=True)
+
+    request_targets_fellow = (
+        models.Q(availability_request__assign_to_all=True)
+        | models.Q(availability_request__cohort__isnull=True)
+    )
+    if fellow.cohort_id:
+        request_targets_fellow |= models.Q(
+            availability_request__cohort_id=fellow.cohort_id
+        )
+
+    return models.Q(availability_request__isnull=True) | (
+        models.Q(availability_request__is_active=True)
+        & request_targets_fellow
+    )
+
+
 class Task(models.Model):
     class Scope(models.TextChoices):
         TEAM = 'team', 'Team'
@@ -184,7 +223,7 @@ class Task(models.Model):
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING)
     source = models.CharField(max_length=10, choices=Source.choices, default=Source.SELF)
 
-    assigned_to = models.ForeignKey(Fellow, on_delete=models.CASCADE, related_name='tasks')
+    assigned_to = models.ForeignKey(Fellow, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     cohort = models.ForeignKey(Cohort, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
 
     icon = models.CharField(max_length=20, blank=True)
@@ -195,6 +234,127 @@ class Task(models.Model):
     due_date = models.DateField(null=True, blank=True)
 
     google_task_id = models.CharField(max_length=200, blank=True)
+    availability_request = models.ForeignKey(
+        'AvailabilityRequest',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='tasks'
+    )
+
+    @classmethod
+    def assign_task(
+        cls,
+        title,
+        description='',
+        scope=Scope.PERSONAL,
+        due_date=None,
+        target_mode='fellow',
+        fellow=None,
+        cohort=None,
+        source=Source.UNBOUND,
+        icon='',
+        color='',
+        availability_request=None,
+    ):
+        """
+        Creates and assigns tasks according to the chosen distribution mode.
+        - 'fellow': Single task for specific fellow.
+        - 'cohort_team': Single team task for the cohort (one completion completes for cohort).
+        - 'cohort_individual': Personal task for each member in the cohort.
+        - 'all_cohorts_team': 1 shared team task per cohort with active fellows.
+        - 'all_fellows_individual': 1 personal task per active fellow.
+        """
+        created_tasks = []
+        eligible_fellows = Fellow.objects.filter(
+            role=Fellow.Role.FELLOW,
+            user__is_active=True,
+        )
+        default_icon = icon or ('fa-pen-to-square' if scope == cls.Scope.TEAM else 'fa-check')
+        default_color = color or ('#00B4D8' if scope == cls.Scope.TEAM else '#e0a009')
+
+        if target_mode == 'all_cohorts_team':
+            # A shared assignment is represented by one task row per cohort.
+            # Limit those rows to cohorts that currently have active fellows.
+            cohorts = Cohort.objects.filter(fellows__in=eligible_fellows).distinct()
+            for c in cohorts:
+                t = cls.objects.create(
+                    title=title,
+                    description=description,
+                    scope=cls.Scope.TEAM,
+                    source=source,
+                    cohort=c,
+                    assigned_to=None,
+                    due_date=due_date,
+                    icon=default_icon,
+                    color=default_color,
+                    availability_request=availability_request,
+                )
+                created_tasks.append(t)
+
+        elif target_mode == 'all_fellows_individual':
+            for f in eligible_fellows:
+                t = cls.objects.create(
+                    title=title,
+                    description=description,
+                    scope=cls.Scope.PERSONAL,
+                    source=source,
+                    cohort=f.cohort,
+                    assigned_to=f,
+                    due_date=due_date,
+                    icon=default_icon,
+                    color=default_color,
+                    availability_request=availability_request,
+                )
+                created_tasks.append(t)
+
+        elif target_mode == 'cohort_team' and cohort:
+            t = cls.objects.create(
+                title=title,
+                description=description,
+                scope=cls.Scope.TEAM,
+                source=source,
+                cohort=cohort,
+                assigned_to=None,
+                due_date=due_date,
+                icon=default_icon,
+                color=default_color,
+                availability_request=availability_request,
+            )
+            created_tasks.append(t)
+
+        elif target_mode == 'cohort_individual' and cohort:
+            for f in eligible_fellows.filter(cohort=cohort):
+                t = cls.objects.create(
+                    title=title,
+                    description=description,
+                    scope=cls.Scope.PERSONAL,
+                    source=source,
+                    cohort=cohort,
+                    assigned_to=f,
+                    due_date=due_date,
+                    icon=default_icon,
+                    color=default_color,
+                    availability_request=availability_request,
+                )
+                created_tasks.append(t)
+
+        elif fellow:
+            t = cls.objects.create(
+                title=title,
+                description=description,
+                scope=scope,
+                source=source,
+                cohort=cohort or fellow.cohort,
+                assigned_to=fellow,
+                due_date=due_date,
+                icon=default_icon,
+                color=default_color,
+                availability_request=availability_request,
+            )
+            created_tasks.append(t)
+
+        return created_tasks
 
     def __str__(self):
         return f"[{self.get_status_display()}] {self.title}"
@@ -203,19 +363,129 @@ class Task(models.Model):
         ordering = ['-created_at']
 
 
+class AvailabilityRequest(models.Model):
+    """When to meet / availability request created by admin for a specific cohort or all fellows."""
+    title = models.CharField(max_length=200, help_text="e.g. Sprint 3 Sync Availability")
+    description = models.TextField(blank=True, help_text="Instructions or context for the fellows.")
+    start_date = models.DateField(help_text="Start date of the availability window.")
+    end_date = models.DateField(help_text="End date of the availability window.")
+    start_hour = models.PositiveSmallIntegerField(default=9, help_text="Starting hour (0-23, default 9 for 9 AM).")
+    end_hour = models.PositiveSmallIntegerField(default=18, help_text="Ending hour (0-23, default 18 for 6 PM).")
+
+    cohort = models.ForeignKey(
+        'Cohort',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='availability_requests',
+        help_text="Target cohort. Leave blank if assigning to all fellows."
+    )
+    assign_to_all = models.BooleanField(
+        default=False,
+        help_text="If checked, this request applies to all active fellows regardless of cohort."
+    )
+    deadline = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Optional submission deadline for fellows."
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Active requests are visible in the fellows' Meeting Hub."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_availability_requests'
+    )
+
+    def target_fellows(self):
+        """Active fellow accounts who should receive this availability request."""
+        target_fellows = Fellow.objects.filter(
+            role=Fellow.Role.FELLOW,
+            user__is_active=True,
+        )
+        if not self.assign_to_all and self.cohort_id:
+            target_fellows = target_fellows.filter(cohort_id=self.cohort_id)
+        return target_fellows.select_related('user', 'cohort')
+
+    def create_tasks_for_fellows(self):
+        """Create or ensure one UNbound availability task per active target fellow."""
+        if not self.is_active:
+            return []
+
+        created_tasks = []
+        for fellow in self.target_fellows():
+            task, _ = Task.objects.get_or_create(
+                assigned_to=fellow,
+                availability_request=self,
+                defaults={
+                    'title': f"When2meet: {self.title}",
+                    'description': self.description or f"Submit your availability for {self.start_date.strftime('%b %d')} – {self.end_date.strftime('%b %d')}.",
+                    'scope': Task.Scope.PERSONAL,
+                    'status': Task.Status.PENDING,
+                    'source': Task.Source.UNBOUND,
+                    'icon': 'fa-calendar-check',
+                    'color': '#00B4D8',
+                    'due_date': self.deadline or self.start_date,
+                    'cohort': fellow.cohort,
+                }
+            )
+            created_tasks.append(task)
+        return created_tasks
+
+    def __str__(self):
+        target = "All Cohorts" if self.assign_to_all or not self.cohort else f"Cohort {self.cohort.name}"
+        return f"{self.title} ({self.start_date} to {self.end_date}) — {target}"
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "When to Meet Request"
+        verbose_name_plural = "When to Meet Requests"
+
+
 class MeetingAvailability(models.Model):
+    availability_request = models.ForeignKey(
+        AvailabilityRequest,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='availability_slots'
+    )
     fellow = models.ForeignKey(Fellow, on_delete=models.CASCADE, related_name='availability_slots')
-    day_of_week = models.PositiveSmallIntegerField()
+    date = models.DateField(null=True, blank=True)
+    day_of_week = models.PositiveSmallIntegerField(null=True, blank=True)
     hour = models.PositiveSmallIntegerField()
     is_available = models.BooleanField(default=False)
 
+    def save(self, *args, **kwargs):
+        if self.date and self.day_of_week is None:
+            self.day_of_week = (self.date.weekday() + 1) % 7
+        super().save(*args, **kwargs)
+
     def __str__(self):
+        if self.date:
+            return f"{self.fellow} — {self.date} {self.hour}:00 ({'Free' if self.is_available else 'Busy'})"
         days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-        return f"{self.fellow} — {days[self.day_of_week]} {self.hour}:00"
+        dow = self.day_of_week if self.day_of_week is not None else 0
+        return f"{self.fellow} — {days[dow]} {self.hour}:00"
 
     class Meta:
-        unique_together = ['fellow', 'day_of_week', 'hour']
-        ordering = ['day_of_week', 'hour']
+        ordering = ['date', 'day_of_week', 'hour']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['availability_request', 'fellow', 'date', 'hour'],
+                name='unique_availability_request_slot'
+            ),
+            models.UniqueConstraint(
+                fields=['fellow', 'day_of_week', 'hour'],
+                condition=models.Q(availability_request__isnull=True),
+                name='unique_legacy_availability_slot'
+            )
+        ]
 
 
 class Badge(models.Model):

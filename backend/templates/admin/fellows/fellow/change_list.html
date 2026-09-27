@@ -1,0 +1,13 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  {{ block.super }}
+  {% if can_email_pending_assignments %}
+    <li>
+      <form action="{% url 'admin:fellows_fellow_send_pending_reminders' %}" method="post" onsubmit="return confirm('Send each active fellow an email with their incomplete assignments?');">
+        {% csrf_token %}
+        <button type="submit" class="button">Email pending tasks to all fellows</button>
+      </form>
+    </li>
+  {% endif %}
+{% endblock %}

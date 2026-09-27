@@ -19,6 +19,78 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   const csrftoken = getCookie('csrftoken');
 
+  /* ---------- Persisted dashboard accent ---------- */
+  const accentChoices = Array.from(document.querySelectorAll('[data-accent-choice]'));
+  const accentStatus = document.getElementById('accentSaveStatus');
+  const accentModal = document.getElementById('dashboardPreferencesModal');
+  const validAccents = ['ocean', 'sky', 'coral', 'violet', 'mint', 'forest', 'rose', 'amber'];
+
+  function setAccentPalette(palette) {
+    if (!validAccents.includes(palette)) return;
+    document.body.dataset.accent = palette;
+    accentChoices.forEach(choice => {
+      choice.setAttribute('aria-pressed', String(choice.dataset.accentChoice === palette));
+    });
+  }
+
+  function closeAccentModal() {
+    if (!accentModal) return;
+    accentModal.classList.remove('active');
+    accentModal.setAttribute('aria-hidden', 'true');
+  }
+
+  setAccentPalette(document.body.dataset.accent || 'ocean');
+
+  const openAccentButton = document.getElementById('openDashboardPreferences');
+  const closeAccentButton = document.getElementById('closeDashboardPreferences');
+  if (openAccentButton && accentModal) {
+    openAccentButton.addEventListener('click', () => {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+      accentModal.classList.add('active');
+      accentModal.setAttribute('aria-hidden', 'false');
+      const selected = accentModal.querySelector('[aria-pressed="true"]');
+      if (selected) selected.focus();
+    });
+  }
+  if (closeAccentButton) closeAccentButton.addEventListener('click', closeAccentModal);
+  if (accentModal) {
+    accentModal.addEventListener('click', event => {
+      if (event.target === accentModal) closeAccentModal();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && accentModal.classList.contains('active')) closeAccentModal();
+    });
+  }
+
+  accentChoices.forEach(choice => {
+    choice.addEventListener('click', () => {
+      const palette = choice.dataset.accentChoice;
+      const previousPalette = document.body.dataset.accent || 'ocean';
+      if (!validAccents.includes(palette) || palette === previousPalette) return;
+
+      setAccentPalette(palette);
+      if (accentStatus) accentStatus.textContent = 'Saving your color…';
+      accentChoices.forEach(button => { button.disabled = true; });
+
+      fetch('/api/dashboard/preferences/', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ accent_palette: palette })
+      })
+        .then(response => response.json().then(data => ({ response, data })))
+        .then(({ response, data }) => {
+          if (!response.ok || data.status !== 'success') throw new Error(data.detail || 'Unable to save preference.');
+          if (accentStatus) accentStatus.textContent = 'Color saved to your profile.';
+        })
+        .catch(() => {
+          setAccentPalette(previousPalette);
+          if (accentStatus) accentStatus.textContent = 'Could not save the color. Your previous choice was restored.';
+        })
+        .finally(() => accentChoices.forEach(button => { button.disabled = false; }));
+    });
+  });
+
   /* ---------- Navigation / View Switcher ---------- */
   window.showView = function (name) {
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
@@ -36,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (name === 'calendar') {
       loadCalendar('calendarEvents');
     } else if (name === 'meetings') {
+      loadCalendar('calendarEvents');
       loadMeetingHub();
     } else if (name === 'badges') {
       loadBadges();
@@ -269,62 +342,160 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function requestCalendarEvents(range = null) {
+    let url = '/api/google/calendar/';
+    if (range) {
+      const params = new URLSearchParams({ time_min: range.timeMin, time_max: range.timeMax });
+      url += `?${params.toString()}`;
+    }
+
+    return fetch(url)
+      .then(response => response.json().then(data => ({ response, data })))
+      .then(({ response, data }) => {
+        if (!response.ok || data.connected === false) {
+          throw new Error(data.detail || 'Unable to load Google Calendar events.');
+        }
+        const events = Array.isArray(data.events) ? data.events : [];
+        const seenIds = new Set();
+        const seenAllDayEvents = new Set();
+        return events.filter(event => {
+          if (event.id && seenIds.has(event.id)) return false;
+          if (event.id) seenIds.add(event.id);
+
+          // Google can expose the same all-day event as separate records with
+          // different IDs or metadata. Deduplicate what the user actually sees.
+          if (event.start && event.start.date) {
+            const displayDate = parseCalendarEventDate(event);
+            const dateKey = displayDate
+              ? `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`
+              : event.start.date;
+            const titleKey = String(event.summary || '').normalize('NFKC').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+            const duplicateKey = `${dateKey}|${titleKey}`;
+            if (seenAllDayEvents.has(duplicateKey)) return false;
+            seenAllDayEvents.add(duplicateKey);
+          }
+          return true;
+        });
+      });
+  }
+
+  function parseCalendarEventDate(event) {
+    const start = event && event.start;
+    if (!start) return null;
+
+    let date;
+    if (start.dateTime) {
+      date = new Date(start.dateTime);
+    } else if (start.date) {
+      const [year, month, day] = start.date.split('-').map(Number);
+      date = new Date(year, month - 1, day, 12);
+    }
+    return date && !Number.isNaN(date.getTime()) ? date : null;
+  }
+
+  function setCalendarMessage(container, message, kind = 'empty') {
+    container.replaceChildren();
+    const state = document.createElement('div');
+    state.className = kind === 'error' ? 'error-state' : kind === 'loading' ? 'loading' : 'empty-state';
+    state.textContent = message;
+    container.appendChild(state);
+  }
+
+  function buildCalendarEventItem(event, compact = false) {
+    const date = parseCalendarEventDate(event);
+    if (!date) return null;
+
+    const item = document.createElement('div');
+    item.className = compact ? 'nextup-item' : 'event-item';
+
+    const dateBox = document.createElement('div');
+    dateBox.className = compact ? 'nextup-date-box' : 'event-date';
+    const month = document.createElement('span');
+    month.textContent = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+    const day = document.createElement('span');
+    day.textContent = String(date.getDate());
+    dateBox.append(month, day);
+
+    const info = document.createElement('div');
+    info.className = compact ? 'nextup-info' : 'event-main';
+    const title = document.createElement('div');
+    title.className = compact ? 'nextup-title' : 'item-title';
+    title.textContent = event.summary || 'Untitled event';
+    const meta = document.createElement('div');
+    meta.className = compact ? 'nextup-meta' : 'item-meta';
+    const time = event.start && event.start.dateTime
+      ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      : 'All day';
+    meta.textContent = [time, event.location].filter(Boolean).join(' · ');
+    info.append(title, meta);
+    item.append(dateBox, info);
+
+    if (!compact && event.htmlLink) {
+      try {
+        const linkUrl = new URL(event.htmlLink);
+        if (linkUrl.protocol === 'https:' && (linkUrl.hostname === 'google.com' || linkUrl.hostname.endsWith('.google.com'))) {
+          const link = document.createElement('a');
+          link.className = 'open-link';
+          link.href = linkUrl.href;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = 'Open';
+          item.appendChild(link);
+        }
+      } catch (_) {
+        // Ignore malformed calendar links while keeping the event visible.
+      }
+    }
+    return item;
+  }
+
+  function renderCalendarEvents(container, events, compact = false) {
+    container.replaceChildren();
+    const seenAllDayDisplayKeys = new Set();
+    const validEvents = events
+      .map(event => ({ event, date: parseCalendarEventDate(event) }))
+      .filter(item => item.date)
+      .sort((a, b) => a.date - b.date)
+      .filter(({ event, date }) => {
+        if (!event.start || !event.start.date) return true;
+        const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        const titleKey = String(event.summary || '').normalize('NFKC').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+        const duplicateKey = `${dateKey}|${titleKey}`;
+        if (seenAllDayDisplayKeys.has(duplicateKey)) return false;
+        seenAllDayDisplayKeys.add(duplicateKey);
+        return true;
+      });
+
+    if (!validEvents.length) {
+      setCalendarMessage(container, 'No upcoming events found in your primary Google Calendar.');
+      return;
+    }
+
+    validEvents.slice(0, compact ? 2 : 10).forEach(({ event }) => {
+      const item = buildCalendarEventItem(event, compact);
+      if (item) container.appendChild(item);
+    });
+  }
+
   function loadNextUpEvents() {
     const listEl = document.getElementById('dashNextUpList');
     if (!listEl) return;
+    setCalendarMessage(listEl, 'Loading upcoming events…', 'loading');
 
-    fetch('/api/google/calendar/')
-      .then(res => res.json())
-      .then(data => {
-        if (data.connected && data.events && data.events.length > 0) {
-          listEl.innerHTML = data.events.slice(0, 2).map(ev => {
-            const startDate = ev.start.dateTime || ev.start.date;
-            const d = new Date(startDate);
-            const month = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-            const day = d.getDate();
-            const timeStr = ev.start.dateTime ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'All Day';
-
-            return `
-              <div class="nextup-item">
-                <div class="nextup-date-box">${month}<br/>${day}</div>
-                <div class="nextup-info">
-                  <div class="nextup-title">${ev.summary || 'Cohort Sync'}</div>
-                  <div class="nextup-meta">${timeStr} ${ev.location ? '• ' + ev.location : ''}</div>
-                </div>
-              </div>
-            `;
-          }).join('');
-        } else {
-          listEl.innerHTML = `
-            <div class="nextup-item">
-              <div class="nextup-date-box">JUN<br/>14</div>
-              <div class="nextup-info">
-                <div class="nextup-title">Cohort Sync — Prototype Review</div>
-                <div class="nextup-meta">Sat · 4:00 PM CT · Zoom</div>
-              </div>
-            </div>
-            <div class="nextup-item">
-              <div class="nextup-date-box">JUN<br/>18</div>
-              <div class="nextup-info">
-                <div class="nextup-title">Mentor 1:1 — Diego N.</div>
-                <div class="nextup-meta">Wed · 6:30 PM CT</div>
-              </div>
-            </div>
-          `;
-        }
-      })
-      .catch(() => {
-        listEl.innerHTML = `
-          <div class="nextup-item">
-            <div class="nextup-date-box">JUN<br/>14</div>
-            <div class="nextup-info">
-              <div class="nextup-title">Cohort Sync — Prototype Review</div>
-              <div class="nextup-meta">Sat · 4:00 PM CT · Zoom</div>
-            </div>
-          </div>
-        `;
-      });
+    requestCalendarEvents()
+      .then(events => renderCalendarEvents(listEl, events, true))
+      .catch(error => setCalendarMessage(listEl, error.message || 'Could not load calendar events.', 'error'));
   }
+
+  window.loadCalendar = function (targetId = 'calendarEvents') {
+    const listEl = document.getElementById(targetId);
+    if (!listEl) return;
+    setCalendarMessage(listEl, 'Loading calendar events…', 'loading');
+
+    requestCalendarEvents()
+      .then(events => renderCalendarEvents(listEl, events))
+      .catch(error => setCalendarMessage(listEl, error.message || 'Could not load calendar events. Try refreshing.', 'error'));
+  };
 
   /* ---------- Tasks Controller ---------- */
   let showCompletedTasks = false;
@@ -383,6 +554,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ${isUnbound ? `<div class="source-badge"><i class="fa-solid fa-globe"></i> ASSIGNED BY UNBOUND</div>` : ''}
             <div class="proto-task-title">${t.title}</div>
             ${t.description ? `<div class="proto-task-desc">${t.description}</div>` : ''}
+            ${t.availability_request_id || (t.title && t.title.toLowerCase().includes('when2meet')) ? `
+              <button class="btn btn-ghost btn-open-w2m-task" type="button" onclick="openWhenToMeet(${t.availability_request_id || ''})">
+                <i class="fa-solid fa-calendar-check" style="color: var(--accent);"></i> Open When to Meet
+              </button>
+            ` : ''}
           </div>
           <div class="proto-task-actions">
             <select class="status-select-pill ${t.status}" onchange="updateTaskStatus(${t.id}, this.value)">
@@ -763,12 +939,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  /* ---------- Meeting Hub Controller ---------- */
+  /* ---------- Meeting Hub Controller (When to Meet) ---------- */
+  let activeMeetingRequests = [];
+  let currentRequestId = null;
+  let currentRequestData = null;
+  let currentDates = [];
+  let currentStartHour = 9;
+  let currentEndHour = 18;
+  let availabilityConflictCache = { key: null, events: [] };
+  let availabilityConflictPending = null;
   let userSlotsMap = {};
   let isMouseDown = false;
   let dragTargetState = null;
 
-  function getWeekDayDates() {
+  window.openWhenToMeet = function (requestId = null) {
+    showView('meetings');
+    loadMeetingHub(requestId);
+  };
+
+  function formatShortDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = months[parseInt(parts[1], 10) - 1];
+    return `${m} ${parseInt(parts[2], 10)}`;
+  }
+
+  function getFallbackWeekDayDates() {
     const now = new Date();
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
@@ -777,7 +975,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     const todayDateStr = now.toDateString();
-
     const weekDates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(yesterday);
@@ -785,8 +982,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const isToday = d.toDateString() === todayDateStr;
       const dayOfWeekIdx = d.getDay();
+      const pad = n => (n < 10 ? '0' + n : n);
+      const isoDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
       weekDates.push({
+        date: isoDate,
         dayName: days[dayOfWeekIdx],
         monthName: months[d.getMonth()],
         dayNum: d.getDate(),
@@ -798,22 +998,136 @@ document.addEventListener('DOMContentLoaded', () => {
     return weekDates;
   }
 
-  function loadMeetingHub() {
-    loadUserAvailabilityGrid();
-    loadGroupAvailabilityGrid();
+  function loadMeetingHub(preferredRequestId = null) {
+    fetch('/api/meetings/requests/')
+      .then(res => res.json())
+      .then(data => {
+        const bannerEl = document.getElementById('w2mRequestBanner');
+        const emptyEl = document.getElementById('w2mEmptyState');
+        const controlsEl = document.getElementById('meetingControlsBar');
+        const twoColEl = document.querySelector('.meeting-two-column-layout');
+
+        if (data.status === 'success' && data.requests && data.requests.length > 0) {
+          activeMeetingRequests = data.requests;
+
+          if (preferredRequestId && activeMeetingRequests.some(r => r.id === preferredRequestId)) {
+            currentRequestId = preferredRequestId;
+          } else if (!currentRequestId || !activeMeetingRequests.some(r => r.id === currentRequestId)) {
+            currentRequestId = activeMeetingRequests[0].id;
+          }
+          currentRequestData = activeMeetingRequests.find(r => r.id === currentRequestId) || activeMeetingRequests[0];
+
+          if (bannerEl) bannerEl.style.display = 'block';
+          if (emptyEl) emptyEl.style.display = 'none';
+          if (controlsEl) controlsEl.style.display = 'flex';
+          if (twoColEl) twoColEl.style.display = 'grid';
+
+          renderRequestBanner();
+          loadUserAvailabilityGrid();
+          loadGroupAvailabilityGrid();
+        } else {
+          activeMeetingRequests = [];
+          currentRequestId = null;
+          currentRequestData = null;
+
+          if (bannerEl) bannerEl.style.display = 'none';
+          if (emptyEl) emptyEl.style.display = 'block';
+          if (controlsEl) controlsEl.style.display = 'none';
+          if (twoColEl) twoColEl.style.display = 'none';
+        }
+      })
+      .catch(() => {
+        loadUserAvailabilityGrid();
+        loadGroupAvailabilityGrid();
+      });
+  }
+
+  function renderRequestBanner() {
+    if (!currentRequestData) return;
+    const req = currentRequestData;
+
+    const titleEl = document.getElementById('w2mRequestTitle');
+    const descEl = document.getElementById('w2mRequestDesc');
+    const rangeEl = document.getElementById('w2mDateRange');
+    const deadlineWrap = document.getElementById('w2mDeadlineWrap');
+    const deadlineEl = document.getElementById('w2mDeadline');
+    const statusPill = document.getElementById('w2mStatusPill');
+    const targetCohort = document.getElementById('w2mTargetCohort');
+
+    if (titleEl) titleEl.textContent = req.title || 'When to Meet Request';
+    if (descEl) descEl.textContent = req.description || 'Mark your availability below to coordinate our next team milestone.';
+    if (rangeEl) rangeEl.textContent = `${formatShortDate(req.start_date)} – ${formatShortDate(req.end_date)}`;
+
+    if (deadlineWrap && deadlineEl) {
+      if (req.deadline) {
+        deadlineWrap.style.display = 'inline-flex';
+        deadlineEl.textContent = formatShortDate(req.deadline);
+      } else {
+        deadlineWrap.style.display = 'none';
+      }
+    }
+
+    if (targetCohort) {
+      targetCohort.textContent = req.assign_to_all ? 'All Cohorts' : (req.cohort ? `Cohort` : 'Your Cohort');
+    }
+
+    if (statusPill) {
+      if (req.is_completed) {
+        statusPill.textContent = '✓ Submitted';
+        statusPill.className = 'w2m-status-pill completed';
+      } else {
+        statusPill.textContent = 'Pending';
+        statusPill.className = 'w2m-status-pill';
+      }
+    }
+
+    const selectorWrap = document.getElementById('w2mSelectorWrap');
+    const selectEl = document.getElementById('w2mSelectRequest');
+    if (selectorWrap && selectEl) {
+      if (activeMeetingRequests.length > 1) {
+        selectorWrap.style.display = 'flex';
+        selectEl.innerHTML = activeMeetingRequests.map(r => `
+          <option value="${r.id}" ${r.id === currentRequestId ? 'selected' : ''}>
+            ${r.title} (${formatShortDate(r.start_date)} - ${formatShortDate(r.end_date)})
+          </option>
+        `).join('');
+
+        selectEl.onchange = (e) => {
+          const newId = parseInt(e.target.value, 10);
+          if (newId && newId !== currentRequestId) {
+            currentRequestId = newId;
+            currentRequestData = activeMeetingRequests.find(r => r.id === currentRequestId);
+            renderRequestBanner();
+            loadUserAvailabilityGrid();
+            loadGroupAvailabilityGrid();
+          }
+        };
+      } else {
+        selectorWrap.style.display = 'none';
+      }
+    }
   }
 
   function loadUserAvailabilityGrid() {
     const gridEl = document.getElementById('myAvailabilityGrid');
     if (!gridEl) return;
 
-    fetch('/api/meetings/')
+    let url = '/api/meetings/';
+    if (currentRequestId) {
+      url += `?request_id=${currentRequestId}`;
+    }
+
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         userSlotsMap = {};
         const slots = Array.isArray(data) ? data : (data.results || []);
         slots.forEach(s => {
-          userSlotsMap[`${s.day_of_week}_${s.hour}`] = s.is_available;
+          if (s.date) {
+            userSlotsMap[`${s.date}_${s.hour}`] = s.is_available;
+          } else {
+            userSlotsMap[`${s.day_of_week}_${s.hour}`] = s.is_available;
+          }
         });
         renderUserGrid();
       })
@@ -822,42 +1136,182 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 
+  function renderAvailabilityWeeks(dates, startHour, endHour, renderCell) {
+    const weeks = [];
+    for (let index = 0; index < dates.length; index += 7) {
+      weeks.push(dates.slice(index, index + 7));
+    }
+
+    return weeks.map((week, weekIndex) => {
+      const first = week[0];
+      const last = week[week.length - 1];
+      let html = `
+        <div class="availability-week-block">
+          <div class="availability-week-heading">${first.monthName} ${first.dayNum} – ${last.monthName} ${last.dayNum}</div>
+          <div class="availability-grid-container" style="grid-template-columns: 52px repeat(${week.length}, minmax(42px, 1fr));">
+            <div class="grid-header-cell"></div>
+      `;
+
+      week.forEach(date => {
+        html += `
+          <div class="grid-header-cell ${date.isToday ? 'today-header' : ''}">
+            <div class="grid-header-day">${date.dayName} ${date.isToday ? '•' : ''}</div>
+            <div class="grid-header-date">${date.monthName} ${date.dayNum}</div>
+          </div>
+        `;
+      });
+
+      for (let hour = startHour; hour < endHour; hour++) {
+        const hourLabel = hour > 12 ? `${hour - 12} PM` : (hour === 12 ? '12 PM' : `${hour} AM`);
+        html += `<div class="grid-time-label">${hourLabel}</div>`;
+        week.forEach(date => { html += renderCell(date, hour); });
+      }
+
+      html += `</div></div>`;
+      return html;
+    }).join('');
+  }
+
   function renderUserGrid() {
     const gridEl = document.getElementById('myAvailabilityGrid');
     if (!gridEl) return;
 
-    const weekDates = getWeekDayDates();
-    let html = `<div class="availability-grid-container">`;
+    const dates = (currentDates && currentDates.length > 0) ? currentDates : getFallbackWeekDayDates();
+    const startH = currentStartHour || 9;
+    const endH = currentEndHour || 18;
 
-    html += `<div class="grid-header-cell"></div>`;
-    weekDates.forEach(d => {
-      html += `
-        <div class="grid-header-cell ${d.isToday ? 'today-header' : ''}">
-          <div class="grid-header-day">${d.dayName} ${d.isToday ? '•' : ''}</div>
-          <div class="grid-header-date">${d.monthName} ${d.dayNum}</div>
-        </div>
+    gridEl.innerHTML = renderAvailabilityWeeks(dates, startH, endH, (date, hour) => {
+      const slotKey = date.date ? `${date.date}_${hour}` : `${date.dayOfWeek}_${hour}`;
+      const isAvail = !!userSlotsMap[slotKey];
+      return `
+        <div class="grid-cell ${isAvail ? 'active' : ''} ${date.isToday ? 'today-cell' : ''}"
+             data-date="${date.date || ''}" data-day="${date.dayOfWeek}" data-hour="${hour}"></div>
       `;
     });
 
-    for (let h = 9; h <= 17; h++) {
-      const hourLabel = h > 12 ? `${h - 12} PM` : (h === 12 ? '12 PM' : `${h} AM`);
-      html += `<div class="grid-time-label">${hourLabel}</div>`;
+    attachGridEvents();
+    loadAvailabilityConflictEvents(dates);
+  }
 
-      weekDates.forEach(d => {
-        const isAvail = !!userSlotsMap[`${d.dayOfWeek}_${h}`];
-        html += `
-          <div class="grid-cell ${isAvail ? 'active' : ''} ${d.isToday ? 'today-cell' : ''}" 
-               data-day="${d.dayOfWeek}" 
-               data-hour="${h}">
-          </div>
-        `;
-      });
+  function getAvailabilityTimezone() {
+    return document.getElementById('tzSelect')?.value || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  }
+
+  function makeAvailabilityConflictKey(dates) {
+    const validDates = dates.filter(date => date.date);
+    if (!validDates.length) return null;
+    return `${currentRequestId || 'availability'}:${validDates[0].date}:${validDates[validDates.length - 1].date}:${getAvailabilityTimezone()}`;
+  }
+
+  function shiftIsoDate(dateString, days) {
+    const date = new Date(`${dateString}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString();
+  }
+
+  function zonedDateAndMinute(instant, timeZone) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(instant);
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    return {
+      date: `${values.year}-${values.month}-${values.day}`,
+      minute: Number(values.hour) * 60 + Number(values.minute)
+    };
+  }
+
+  function eventConflictsWithSlot(event, slotDate, hour, timeZone) {
+    if (event.transparency === 'transparent' || !event.start) return false;
+    if (event.start.date) {
+      const lastIncludedDate = event.end?.date || shiftIsoDate(event.start.date, 1).slice(0, 10);
+      return slotDate >= event.start.date && slotDate < lastIncludedDate;
+    }
+    if (!event.start.dateTime) return false;
+
+    try {
+      const startInstant = new Date(event.start.dateTime);
+      const endInstant = event.end?.dateTime ? new Date(event.end.dateTime) : new Date(startInstant.getTime() + 60 * 60 * 1000);
+      if (Number.isNaN(startInstant.getTime()) || Number.isNaN(endInstant.getTime())) return false;
+      const start = zonedDateAndMinute(startInstant, timeZone);
+      const end = zonedDateAndMinute(endInstant, timeZone);
+      const slotStart = hour * 60;
+      const slotEnd = slotStart + 60;
+
+      if (start.date === end.date) {
+        return slotDate === start.date && start.minute < slotEnd && end.minute > slotStart;
+      }
+      if (slotDate > start.date && slotDate < end.date) return true;
+      if (slotDate === start.date) return start.minute < slotEnd;
+      if (slotDate === end.date) return end.minute > slotStart;
+    } catch (_) {
+      return false;
+    }
+    return false;
+  }
+
+  function applyAvailabilityConflictHighlights(events, dates, timeZone) {
+    const gridEl = document.getElementById('myAvailabilityGrid');
+    if (!gridEl) return;
+
+    gridEl.querySelectorAll('.grid-cell').forEach(cell => {
+      const conflicts = events.filter(event => eventConflictsWithSlot(
+        event, cell.dataset.date, Number(cell.dataset.hour), timeZone
+      ));
+      cell.classList.toggle('calendar-conflict', conflicts.length > 0);
+      if (conflicts.length) {
+        const titles = [...new Set(conflicts.map(event => event.summary || 'Calendar event'))];
+        cell.title = `Calendar conflict: ${titles.join('; ')}`;
+        cell.setAttribute('aria-label', `Availability slot ${cell.dataset.date} at ${cell.dataset.hour}:00 conflicts with ${titles.join(', ')}`);
+      } else {
+        cell.removeAttribute('title');
+        cell.removeAttribute('aria-label');
+      }
+    });
+  }
+
+  function loadAvailabilityConflictEvents(dates) {
+    const validDates = dates.filter(date => date.date);
+    const key = makeAvailabilityConflictKey(validDates);
+    if (!key) return;
+    const timeZone = getAvailabilityTimezone();
+    const statusEl = document.getElementById('calendarConflictStatus');
+
+    if (availabilityConflictCache.key === key) {
+      applyAvailabilityConflictHighlights(availabilityConflictCache.events, validDates, timeZone);
+      if (statusEl) statusEl.textContent = '';
+      return;
     }
 
-    html += `</div>`;
-    gridEl.innerHTML = html;
+    if (availabilityConflictPending && availabilityConflictPending.key === key) return;
 
-    attachGridEvents();
+    const firstDate = validDates[0].date;
+    const lastDate = validDates[validDates.length - 1].date;
+    const request = {
+      timeMin: shiftIsoDate(firstDate, -1),
+      timeMax: shiftIsoDate(lastDate, 2)
+    };
+    if (statusEl) statusEl.textContent = '';
+
+    const promise = requestCalendarEvents(request)
+      .then(events => ({ events, error: null }))
+      .catch(error => ({ events: [], error }));
+    availabilityConflictPending = { key, promise };
+
+    promise.then(result => {
+      if (availabilityConflictPending && availabilityConflictPending.key === key) {
+        availabilityConflictPending = null;
+        if (!result.error) availabilityConflictCache = { key, events: result.events };
+      }
+
+      if (makeAvailabilityConflictKey(currentDates) !== key) return;
+      if (result.error) {
+        if (statusEl) statusEl.textContent = `Calendar conflict check failed: ${result.error.message}`;
+        return;
+      }
+      if (statusEl) statusEl.textContent = '';
+      applyAvailabilityConflictHighlights(result.events, validDates, timeZone);
+    });
   }
 
   function attachGridEvents() {
@@ -867,18 +1321,20 @@ document.addEventListener('DOMContentLoaded', () => {
       cell.addEventListener('mousedown', (e) => {
         e.preventDefault();
         isMouseDown = true;
+        const date = cell.dataset.date;
         const day = cell.dataset.day;
         const hour = cell.dataset.hour;
         const currentState = cell.classList.contains('active');
         dragTargetState = !currentState;
-        toggleCellState(cell, day, hour, dragTargetState);
+        toggleCellState(cell, date, day, hour, dragTargetState);
       });
 
       cell.addEventListener('mouseenter', () => {
         if (isMouseDown) {
+          const date = cell.dataset.date;
           const day = cell.dataset.day;
           const hour = cell.dataset.hour;
-          toggleCellState(cell, day, hour, dragTargetState);
+          toggleCellState(cell, date, day, hour, dragTargetState);
         }
       });
     });
@@ -891,21 +1347,36 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function toggleCellState(cell, day, hour, newState) {
+  function toggleCellState(cell, date, day, hour, newState) {
     cell.classList.toggle('active', newState);
-    userSlotsMap[`${day}_${hour}`] = newState;
+    if (date) {
+      userSlotsMap[`${date}_${hour}`] = newState;
+    } else {
+      userSlotsMap[`${day}_${hour}`] = newState;
+    }
   }
 
-  function saveUserAvailability() {
+  function saveUserAvailability(showToast = false) {
+    const dates = (currentDates && currentDates.length > 0) ? currentDates : getFallbackWeekDayDates();
+    const startH = currentStartHour || 9;
+    const endH = currentEndHour || 18;
+
     const slots = [];
-    for (let d = 0; d < 7; d++) {
-      for (let h = 9; h <= 17; h++) {
+    dates.forEach(d => {
+      for (let h = startH; h < endH; h++) {
+        const slotKey = d.date ? `${d.date}_${h}` : `${d.dayOfWeek}_${h}`;
         slots.push({
-          day_of_week: d,
+          date: d.date || null,
+          day_of_week: d.dayOfWeek,
           hour: h,
-          is_available: !!userSlotsMap[`${d}_${h}`]
+          is_available: !!userSlotsMap[slotKey]
         });
       }
+    });
+
+    const payload = { slots };
+    if (currentRequestId) {
+      payload.request_id = currentRequestId;
     }
 
     fetch('/api/meetings/bulk-save/', {
@@ -914,11 +1385,27 @@ document.addEventListener('DOMContentLoaded', () => {
         'Content-Type': 'application/json',
         'X-CSRFToken': csrftoken
       },
-      body: JSON.stringify({ slots })
+      body: JSON.stringify(payload)
     })
       .then(res => res.json())
-      .then(() => {
+      .then(data => {
         loadGroupAvailabilityGrid();
+
+        const hasActive = Object.values(userSlotsMap).some(Boolean);
+        const statusPill = document.getElementById('w2mStatusPill');
+        if (statusPill && hasActive) {
+          statusPill.textContent = '✓ Submitted';
+          statusPill.className = 'w2m-status-pill completed';
+        }
+
+        const toast = document.getElementById('w2mSaveToast');
+        if (toast) {
+          toast.style.display = 'inline-flex';
+          toast.innerHTML = `<i class="fa-solid fa-circle-check"></i> Saved & Task Updated!`;
+          setTimeout(() => {
+            toast.style.display = 'none';
+          }, 2600);
+        }
       });
   }
 
@@ -927,12 +1414,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!gridEl) return;
 
     const tz = document.getElementById('tzSelect')?.value || 'America/Monterrey';
+    let url = `/api/meetings/group-availability/?timezone=${encodeURIComponent(tz)}`;
+    if (currentRequestId) {
+      url += `&request_id=${currentRequestId}`;
+    }
 
-    fetch(`/api/meetings/group-availability/?timezone=${encodeURIComponent(tz)}`)
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         if (data.status === 'success') {
+          if (data.dates && data.dates.length > 0) {
+            currentDates = data.dates;
+          }
+          if (data.start_hour) currentStartHour = data.start_hour;
+          if (data.end_hour) currentEndHour = data.end_hour;
+
           renderGroupGrid(data.matrix, data.total_members);
+          renderUserGrid();
         }
       });
   }
@@ -941,62 +1439,43 @@ document.addEventListener('DOMContentLoaded', () => {
     const gridEl = document.getElementById('groupAvailabilityGrid');
     if (!gridEl) return;
 
-    const weekDates = getWeekDayDates();
+    const dates = (currentDates && currentDates.length > 0) ? currentDates : getFallbackWeekDayDates();
+    const startH = currentStartHour || 9;
+    const endH = currentEndHour || 18;
+
     const matrixMap = {};
-    matrix.forEach(m => {
-      matrixMap[`${m.day_of_week}_${m.hour}`] = m;
+    (Array.isArray(matrix) ? matrix : []).forEach(m => {
+      const key = m.date ? `${m.date}_${m.hour}` : `${m.day_of_week}_${m.hour}`;
+      matrixMap[key] = m;
     });
 
-    let html = `<div class="availability-grid-container">`;
+    const accentRgb = getComputedStyle(document.body).getPropertyValue('--accent-rgb').trim() || '0, 180, 216';
+    gridEl.innerHTML = renderAvailabilityWeeks(dates, startH, endH, (date, hour) => {
+      const slotKey = date.date ? `${date.date}_${hour}` : `${date.dayOfWeek}_${hour}`;
+      const info = matrixMap[slotKey] || { available_count: 0, available_members: [] };
+      const count = info.available_count;
+      const ratio = totalMembers > 0 ? count / totalMembers : 0;
 
-    html += `<div class="grid-header-cell"></div>`;
-    weekDates.forEach(d => {
-      html += `
-        <div class="grid-header-cell ${d.isToday ? 'today-header' : ''}">
-          <div class="grid-header-day">${d.dayName} ${d.isToday ? '•' : ''}</div>
-          <div class="grid-header-date">${d.monthName} ${d.dayNum}</div>
+      let alpha = 0.05;
+      if (ratio > 0) alpha = 0.25 + 0.75 * ratio;
+      const bgStyle = `background-color: rgba(${accentRgb}, ${alpha.toFixed(2)});`;
+      const textStyle = ratio > 0.5 ? 'color: #ffffff;' : 'color: var(--ink);';
+      const isGroupEvent = !!info.group_event;
+
+      let tooltipText = `${count} of ${totalMembers} free`;
+      if (info.available_members && info.available_members.length > 0) {
+        tooltipText += `: ${info.available_members.join(', ')}`;
+      }
+      if (isGroupEvent) tooltipText += ` | Event: ${info.group_event}`;
+
+      return `
+        <div class="grid-cell group-cell ${isGroupEvent ? 'group-event-cell' : ''} ${date.isToday ? 'today-cell' : ''}"
+             style="${bgStyle} ${textStyle}">
+          ${count > 0 ? count : ''}
+          <div class="grid-cell-tooltip">${tooltipText}</div>
         </div>
       `;
     });
-
-    for (let h = 9; h <= 17; h++) {
-      const hourLabel = h > 12 ? `${h - 12} PM` : (h === 12 ? '12 PM' : `${h} AM`);
-      html += `<div class="grid-time-label">${hourLabel}</div>`;
-
-      weekDates.forEach(d => {
-        const info = matrixMap[`${d.dayOfWeek}_${h}`] || { available_count: 0, available_members: [] };
-        const count = info.available_count;
-        const ratio = totalMembers > 0 ? count / totalMembers : 0;
-
-        let alpha = 0.05;
-        if (ratio > 0) {
-          alpha = 0.25 + 0.75 * ratio;
-        }
-
-        const bgStyle = `background-color: rgba(0, 180, 216, ${alpha.toFixed(2)});`;
-        const textStyle = ratio > 0.5 ? 'color: #ffffff;' : 'color: var(--ink);';
-        const isGroupEvent = !!info.group_event;
-
-        let tooltipText = `${count} of ${totalMembers} free`;
-        if (info.available_members && info.available_members.length > 0) {
-          tooltipText += `: ${info.available_members.join(', ')}`;
-        }
-        if (isGroupEvent) {
-          tooltipText += ` | Event: ${info.group_event}`;
-        }
-
-        html += `
-          <div class="grid-cell group-cell ${isGroupEvent ? 'group-event-cell' : ''} ${d.isToday ? 'today-cell' : ''}" 
-               style="${bgStyle} ${textStyle}">
-            ${count > 0 ? count : ''}
-            <div class="grid-cell-tooltip">${tooltipText}</div>
-          </div>
-        `;
-      });
-    }
-
-    html += `</div>`;
-    gridEl.innerHTML = html;
   }
 
   const btnSyncCalendar = document.getElementById('btnSyncGoogleCalendar');
@@ -1006,20 +1485,25 @@ document.addEventListener('DOMContentLoaded', () => {
       btnSyncCalendar.disabled = true;
       btnSyncCalendar.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Syncing...`;
 
+      const payload = { timezone: tz };
+      if (currentRequestId) {
+        payload.request_id = currentRequestId;
+      }
+
       fetch('/api/meetings/sync-google/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-CSRFToken': csrftoken
         },
-        body: JSON.stringify({ timezone: tz })
+        body: JSON.stringify(payload)
       })
         .then(res => res.json())
         .then(data => {
           btnSyncCalendar.disabled = false;
           btnSyncCalendar.innerHTML = `<i class="fa-brands fa-google"></i> Sync with Google Calendar`;
           if (data.connected && data.status === 'success') {
-            loadMeetingHub();
+            loadMeetingHub(currentRequestId);
           } else {
             alert(data.detail || 'Failed to sync calendar.');
           }
@@ -1029,6 +1513,13 @@ document.addEventListener('DOMContentLoaded', () => {
           btnSyncCalendar.innerHTML = `<i class="fa-brands fa-google"></i> Sync with Google Calendar`;
           alert('Error syncing with Google Calendar.');
         });
+    });
+  }
+
+  const btnSubmitAvail = document.getElementById('btnSubmitAvailability');
+  if (btnSubmitAvail) {
+    btnSubmitAvail.addEventListener('click', () => {
+      saveUserAvailability(true);
     });
   }
 
@@ -1048,7 +1539,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const tzSelect = document.getElementById('tzSelect');
   if (tzSelect) {
-    tzSelect.addEventListener('change', () => loadMeetingHub());
+    tzSelect.addEventListener('change', () => loadMeetingHub(currentRequestId));
   }
 
   /* ---------- Milestones & Achievements Controller ---------- */
@@ -1085,39 +1576,53 @@ document.addEventListener('DOMContentLoaded', () => {
             if (b.earned) {
               return `
                 <div class="badge-card earned">
-                  <div class="badge-icon-circle" style="background-color: ${b.color || '#00B4D8'};">
-                    <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
+                  <div class="badge-icon-rail">
+                    <div class="badge-icon-circle" style="background-color: ${b.color || '#00B4D8'};">
+                      <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
+                    </div>
                   </div>
-                  <div class="badge-title">${b.name}</div>
-                  <div class="badge-desc">${b.description}</div>
-                  <div class="badge-status-pill earned"><i class="fa-solid fa-check"></i> EARNED</div>
+                  <div class="badge-copy">
+                    <div class="badge-title">${b.name}</div>
+                    <div class="badge-desc">${b.description}</div>
+                  </div>
+                  <div class="badge-progress-column"><div class="badge-status-pill earned"><i class="fa-solid fa-check"></i> EARNED</div></div>
                 </div>
               `;
             } else if (b.progress > 0) {
               return `
                 <div class="badge-card unearned">
-                  <div class="badge-icon-circle">
-                    <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
-                  </div>
-                  <div class="badge-title">${b.name}</div>
-                  <div class="badge-desc">${b.description}</div>
-                  <div class="badge-progress-wrap">
-                    <div class="badge-progress-bar">
-                      <div class="badge-progress-fill" style="width: ${b.progress}%;"></div>
+                  <div class="badge-icon-rail">
+                    <div class="badge-icon-circle">
+                      <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
                     </div>
-                    <div class="badge-progress-text">${b.progress}% COMPLETE</div>
+                  </div>
+                  <div class="badge-copy">
+                    <div class="badge-title">${b.name}</div>
+                    <div class="badge-desc">${b.description}</div>
+                  </div>
+                  <div class="badge-progress-column">
+                    <div class="badge-progress-wrap">
+                      <div class="badge-progress-bar">
+                        <div class="badge-progress-fill" style="width: ${b.progress}%;"></div>
+                      </div>
+                      <div class="badge-progress-text">${b.progress}% COMPLETE</div>
+                    </div>
                   </div>
                 </div>
               `;
             } else {
               return `
                 <div class="badge-card unearned">
-                  <div class="badge-icon-circle">
-                    <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
+                  <div class="badge-icon-rail">
+                    <div class="badge-icon-circle">
+                      <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
+                    </div>
                   </div>
-                  <div class="badge-title">${b.name}</div>
-                  <div class="badge-desc">${b.description}</div>
-                  <div class="badge-status-pill locked"><i class="fa-solid fa-lock"></i> LOCKED</div>
+                  <div class="badge-copy">
+                    <div class="badge-title">${b.name}</div>
+                    <div class="badge-desc">${b.description}</div>
+                  </div>
+                  <div class="badge-progress-column"><div class="badge-status-pill locked"><i class="fa-solid fa-lock"></i> LOCKED</div></div>
                 </div>
               `;
             }

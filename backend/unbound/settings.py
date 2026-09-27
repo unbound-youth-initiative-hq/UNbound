@@ -185,6 +185,13 @@ SOCIALACCOUNT_PROVIDERS = {
 
 SOCIALACCOUNT_STORE_TOKENS = True
 
+# Email address whose Drive files are shared with fellows.
+GOOGLE_SHARED_WORKSPACE_EMAIL = (
+    os.getenv("GOOGLE_SHARED_WORKSPACE_EMAIL")
+    or os.getenv("DRIVE_SHARED_BY_EMAIL")
+    or "workspace@unbound.org"
+).strip()
+
 
 # ──────────────────────────────────────────────
 # Django REST Framework settings
@@ -197,9 +204,16 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ]
 }
-# ──────────────────────────────────────────────
-# Admin-configured Shared Workspace Email Account
-# ──────────────────────────────────────────────
-GOOGLE_SHARED_WORKSPACE_EMAIL = os.getenv('GOOGLE_SHARED_WORKSPACE_EMAIL', 'contactmaxdme@gmail.com')
-
 SOCIALACCOUNT_ADAPTER = 'fellows.adapter.UnboundSocialAccountAdapter'
+
+# ──────────────────────────────────────────────
+# Email Configuration
+# ──────────────────────────────────────────────
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 't')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'UNbound Fellowship <noreply@unbound.org>')
+SITE_BASE_URL = os.getenv('SITE_BASE_URL', 'http://localhost:8000')
