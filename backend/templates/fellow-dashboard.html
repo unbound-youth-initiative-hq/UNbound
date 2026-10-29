@@ -4,13 +4,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="csrf-token" content="{{ csrf_token }}" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Fellow Dashboard - UNbound</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20260926-accent-palettes-1" />
+  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261029-notice-dismiss-v2" />
 </head>
 <body data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}" data-accent="{{ accent_palette|default:'ocean' }}">
   <aside class="sidebar" id="sidebar">
@@ -42,6 +43,12 @@
       <i class="fa-solid fa-xmark"></i>
     </button>
     <div class="sb-foot">
+      {% if not google_account.connected %}
+        <a class="sb-logout" href="{% provider_login_url 'google' process='connect' next='/dashboard/' %}"><i class="fa-brands fa-google"></i> Connect Google to this account</a>
+      {% endif %}
+      {% if request.user.is_staff %}
+        <a class="sb-logout" href="{% url 'admin:index' %}"><i class="fa-solid fa-gear"></i> Administration</a>
+      {% endif %}
       <div class="sb-profile">
         <div class="avatar">
           {% if google_account.picture %}<img src="{{ google_account.picture }}" alt="" referrerpolicy="no-referrer" />{% else %}{{ request.user.username|slice:":2"|upper }}{% endif %}
@@ -61,6 +68,12 @@
     </button>
 
     <div class="content">
+      {% for message in messages %}
+        <div class="card dashboard-notice" role="status" data-dashboard-notice{% if message.level < 30 %} data-auto-dismiss{% endif %}>
+          <span>{{ message }}</span>
+          <button type="button" class="btn-icon" data-dismiss-notice aria-label="Dismiss notification">&times;</button>
+        </div>
+      {% endfor %}
       <!-- OVERVIEW / DASHBOARD -->
       <section class="view active" id="view-overview">
         <!-- Hero Welcome Header -->
@@ -69,13 +82,15 @@
             <div class="eyebrow">FELLOW DASHBOARD</div>
             <h1 class="welcome-title">Welcome back, <span id="dashFirstName">Fellow</span> 👋</h1>
             <div class="dash-sub-line">
-              <span id="dashCohortName">Cohort 2026–2027</span> · You're in the <strong id="dashCurrentPhase">Launch Sequence</strong> phase
+              <span id="dashCohortName">Loading cohort…</span> · Phase: <strong id="dashCurrentPhase">Loading…</strong>
             </div>
           </div>
           <button class="btn btn-primary btn-view-tasks" type="button" onclick="showView('tasks')">
             <i class="fa-solid fa-plus"></i> View Tasks
           </button>
         </div>
+
+        <p id="dashboardLoadStatus" role="alert" class="error-state"></p>
 
         <!-- Top Stat Cards (3 Columns) -->
         <div class="dash-stat-grid">
@@ -96,7 +111,7 @@
           <div class="dash-stat-card">
             <div class="dash-stat-icon icon-purple"><i class="fa-solid fa-ribbon"></i></div>
             <div class="dash-stat-label">Badges Earned</div>
-            <div class="dash-stat-value"><span id="dashBadgesEarned">0</span> <span class="dim-slash">/ <span id="dashBadgesTotal">9</span></span></div>
+            <div class="dash-stat-value"><span id="dashBadgesEarned">0</span> <span class="dim-slash">/ <span id="dashBadgesTotal">0</span></span></div>
             <div class="dash-stat-sub" id="dashLevelName">Pioneer level</div>
           </div>
         </div>
@@ -108,17 +123,17 @@
             <!-- Dark Teal Project Banner Card -->
             <div class="card project-banner-card">
               <div class="eyebrow project-eyebrow">YOUR PROJECT</div>
-              <h2 class="project-title" id="dashProjectName">Bridges to Brighter Smiles</h2>
+              <h2 class="project-title" id="dashProjectName">Loading project…</h2>
               
               <div class="project-meta-row">
                 <div class="meta-col">
                   <div class="meta-label">CURRENT PHASE</div>
-                  <div class="meta-value phase-pill"><span class="rocket-emoji">🚀</span> <span id="dashBannerPhase">Launch Sequence</span></div>
+                  <div class="meta-value phase-pill"><span class="rocket-emoji">🚀</span> <span id="dashBannerPhase">Loading…</span></div>
                 </div>
 
                 <div class="meta-col">
                   <div class="meta-label">CHAPTER</div>
-                  <div class="meta-value" id="dashChapter">Monterrey, MX</div>
+                  <div class="meta-value" id="dashChapter">Loading…</div>
                 </div>
 
                 <div class="meta-col">
@@ -137,36 +152,8 @@
                 <h3>Fellowship Phases</h3>
               </div>
 
-              <div class="phases-pipeline">
-                <div class="phase-step completed" data-phase="Orbit of Ideas">
-                  <div class="step-line"></div>
-                  <div class="step-name">Orbit of Ideas</div>
-                  <div class="step-sub">Empathize</div>
-                </div>
-
-                <div class="phase-step active" data-phase="Launch Sequence">
-                  <div class="step-line"></div>
-                  <div class="step-name">Launch Sequence</div>
-                  <div class="step-sub">Ideate</div>
-                </div>
-
-                <div class="phase-step" data-phase="Mission Build">
-                  <div class="step-line"></div>
-                  <div class="step-name">Mission Build</div>
-                  <div class="step-sub">Prototype</div>
-                </div>
-
-                <div class="phase-step" data-phase="Trajectory">
-                  <div class="step-line"></div>
-                  <div class="step-name">Trajectory</div>
-                  <div class="step-sub">Test</div>
-                </div>
-
-                <div class="phase-step" data-phase="Touchdown">
-                  <div class="step-line"></div>
-                  <div class="step-name">Touchdown</div>
-                  <div class="step-sub">Impact</div>
-                </div>
+              <div class="phases-pipeline" id="phaseRoadmap">
+                <div class="loading">Loading fellowship phases…</div>
               </div>
             </div>
 
@@ -196,15 +183,15 @@
                 <div class="comp-title">
                   <i class="fa-regular fa-circle-check icon-cyan-text"></i> Overall Completion
                 </div>
-                <div class="comp-value" id="dashCompletionPct">42%</div>
+                <div class="comp-value" id="dashCompletionPct">0%</div>
               </div>
 
               <div class="completion-bar-track">
-                <div class="completion-bar-fill" id="dashCompletionFill" style="width: 42%;"></div>
+                <div class="completion-bar-fill" id="dashCompletionFill" style="width: 0%;"></div>
               </div>
 
               <div class="completion-sub-link" onclick="showView('tasks')">
-                <i class="fa-solid fa-arrow-right"></i> Click to revisit completed phases & meetings
+                <i class="fa-solid fa-arrow-right"></i> Review your assignments
               </div>
             </div>
 
@@ -498,7 +485,7 @@
         <div class="badges-level-banner" id="badgesBanner">
           <div class="banner-ring-box">
             <div class="ring-number" id="bannerRingNumber">0</div>
-            <div class="ring-label">of <span id="bannerRingTotal">9</span></div>
+            <div class="ring-label">of <span id="bannerRingTotal">0</span></div>
           </div>
           <div class="banner-info">
             <h2 id="bannerLevelTitle">Pioneer • Level 1</h2>
@@ -605,6 +592,7 @@
     </div>
   </div>
 
-  <script src="{% static 'dashboard.js' %}?v=20260926-accent-palettes-1"></script>
+  <script src="{% static 'dashboard-utils.js' %}?v=20261029-notice-dismiss-v2"></script>
+  <script src="{% static 'dashboard.js' %}?v=20261029-notice-dismiss-v3"></script>
 </body>
 </html>

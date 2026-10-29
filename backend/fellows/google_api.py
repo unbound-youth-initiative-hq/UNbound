@@ -183,8 +183,7 @@ def fetch_shared_calendar_events_in_range(user, shared_email=None, time_min=None
 def sync_user_calendar_availability(user, tz_str='America/Monterrey', request_id=None):
     """
     Syncs the user's primary Google Calendar events into MeetingAvailability records.
-    If request_id is provided, syncs for the exact date range [start_date, end_date] of the AvailabilityRequest.
-    Otherwise falls back to a 7-day rolling window for backwards compatibility.
+    Requires an active assigned request and submits its complete grid atomically.
     """
     from .models import MeetingAvailability, AvailabilityRequest, Task
 
@@ -197,25 +196,14 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey', request_id
     except Exception:
         tz = ZoneInfo('America/Monterrey')
 
-    avail_request = None
-    if request_id:
-        avail_request = AvailabilityRequest.objects.filter(id=request_id).first()
-
-    if avail_request:
-        start_of_window = datetime.combine(avail_request.start_date, datetime.min.time(), tzinfo=tz)
-        end_of_window = datetime.combine(avail_request.end_date + timedelta(days=1), datetime.min.time(), tzinfo=tz)
-        start_hour = avail_request.start_hour
-        end_hour = avail_request.end_hour
-        num_days = (avail_request.end_date - avail_request.start_date).days + 1
-        base_date = avail_request.start_date
-    else:
-        now = datetime.now(tz)
-        start_of_window = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        end_of_window = start_of_window + timedelta(days=7)
-        start_hour = 9
-        end_hour = 18
-        num_days = 7
-        base_date = start_of_window.date()
+    from .availability import request_for_fellow, submit_availability
+    avail_request = request_for_fellow(fellow, request_id)
+    start_of_window = datetime.combine(avail_request.start_date, datetime.min.time(), tzinfo=tz)
+    end_of_window = datetime.combine(avail_request.end_date + timedelta(days=1), datetime.min.time(), tzinfo=tz)
+    start_hour = avail_request.start_hour
+    end_hour = avail_request.end_hour
+    num_days = (avail_request.end_date - avail_request.start_date).days + 1
+    base_date = avail_request.start_date
 
     events = fetch_calendar_events_in_range(
         user,
@@ -262,41 +250,11 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey', request_id
                     is_busy = True
                     break
 
-            if avail_request:
-                slot, _ = MeetingAvailability.objects.update_or_create(
-                    availability_request=avail_request,
-                    fellow=fellow,
-                    date=current_date,
-                    hour=h,
-                    defaults={'day_of_week': dow_code, 'is_available': not is_busy}
-                )
-                updated_slots.append({
-                    'id': slot.id,
-                    'date': slot.date.isoformat(),
-                    'day_of_week': slot.day_of_week,
-                    'hour': slot.hour,
-                    'is_available': slot.is_available
-                })
-            else:
-                slot, _ = MeetingAvailability.objects.update_or_create(
-                    fellow=fellow,
-                    day_of_week=dow_code,
-                    hour=h,
-                    defaults={'is_available': not is_busy}
-                )
-                updated_slots.append({
-                    'day_of_week': slot.day_of_week,
-                    'hour': slot.hour,
-                    'is_available': slot.is_available
-                })
+            updated_slots.append({'date': current_date.isoformat(), 'hour': h, 'is_available': not is_busy})
 
-    if avail_request:
-        Task.objects.filter(
-            assigned_to=fellow,
-            availability_request=avail_request
-        ).update(status=Task.Status.COMPLETE)
-
-    return updated_slots
+    records = submit_availability(fellow, request_id, updated_slots)
+    return [{'id': slot.pk, 'date': slot.date.isoformat(), 'day_of_week': slot.day_of_week,
+             'hour': slot.hour, 'is_available': slot.is_available} for slot in records]
 
 
 def fetch_user_drive_folders(user, limit=50):
@@ -418,15 +376,50 @@ def delete_google_task(user, task_id):
 
 
 def sync_task_to_google(user, task):
+    """Mirror a task in the acting user's account, never reuse another user's ID."""
+    from django.db import transaction
+    from .models import GoogleTaskLink, Task
+
+    fellow = getattr(user, 'fellow_profile', None)
+    if not fellow or not user.is_active:
+        return None
+    if task.scope == Task.Scope.TEAM:
+        if not task.cohort_id or fellow.cohort_id != task.cohort_id:
+            return None
+    elif task.assigned_to_id != fellow.pk:
+        return None
+
+    body = {
+        'title': task.title,
+        'notes': task.description,
+        'status': 'completed' if task.status == Task.Status.COMPLETE else 'needsAction',
+    }
+    if task.due_date:
+        body['due'] = f'{task.due_date.isoformat()}T00:00:00Z'
     try:
-        if task.google_task_id:
-            status = 'completed' if task.status == 'complete' else 'needsAction'
-            return update_google_task(user, task.google_task_id, status)
-        result = create_google_task(user, task.title)
-        task.google_task_id = result['id']
-        task.save(update_fields=['google_task_id'])
-        return result
-    except GoogleIntegrationError:
+        service = _google_service('tasks', 'v1', user)
+        # Personal legacy IDs have an identifiable owner. Shared legacy IDs do
+        # not, so they must not be adopted by an arbitrary team member.
+        legacy_id = task.google_task_id if task.scope == Task.Scope.PERSONAL else ''
+        with transaction.atomic():
+            link, _ = GoogleTaskLink.objects.get_or_create(
+                task=task, user=user, defaults={'google_task_id': legacy_id},
+            )
+            link = GoogleTaskLink.objects.select_for_update().get(pk=link.pk)
+            if link.google_task_id:
+                body.setdefault('due', None)
+                result = service.tasks().patch(
+                    tasklist='@default', task=link.google_task_id, body=body,
+                ).execute()
+            else:
+                result = service.tasks().insert(tasklist='@default', body=body).execute()
+                link.google_task_id = result['id']
+                link.save(update_fields=['google_task_id'])
+            return result
+    except Exception as exc:
+        # A Google outage must not undo an already-saved UNbound assignment.
+        # Log the exception class, never OAuth tokens or Google response bodies.
+        logger.warning('Google task mirror failed for task %s/user %s (%s)', task.pk, user.pk, type(exc).__name__)
         return None
 
 

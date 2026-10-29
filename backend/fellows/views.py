@@ -1,12 +1,13 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import render, redirect
 from allauth.socialaccount.models import SocialAccount
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.views import APIView
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -31,7 +32,7 @@ from .google_api import (
 )
 from .models import (
     MeetingAvailability, Task, Fellow, FellowBadge, InviteCode, SDG, Cohort,
-    AvailabilityRequest, availability_task_visibility_filter,
+    AvailabilityRequest, Phase, availability_task_visibility_filter,
 )
 from .serializers import MeetingAvailabilitySerializer, TaskSerializer, AvailabilityRequestSerializer
 from .badges_engine import evaluate_and_sync_badges
@@ -78,6 +79,8 @@ def google_account_details(user):
 def dashboard_view(request):
     """Render the dashboard shell; each Google mini-app loads live data via API."""
     fellow = getattr(request.user, 'fellow_profile', None)
+    if fellow is None:
+        return redirect('register_code')
     return render(request, 'fellow-dashboard.html', {
         'google_account': google_account_details(request.user),
         'accent_palette': fellow.accent_palette if fellow else Fellow.AccentPalette.OCEAN,
@@ -86,6 +89,8 @@ def dashboard_view(request):
 
 def register_code_view(request):
     """View where new fellows enter their invitation code before logging in with Google."""
+    if request.user.is_authenticated and Fellow.objects.filter(user=request.user).exists():
+        return redirect('dashboard')
     error = None
     if request.method == 'POST':
         code_input = request.POST.get('invite_code', '').strip().upper()
@@ -97,7 +102,7 @@ def register_code_view(request):
                 valid, msg = invite.is_valid()
                 if valid:
                     request.session['verified_invite_code_id'] = invite.id
-                    return redirect('/accounts/google/login/')
+                    return redirect('/accounts/google/login/?process=connect&next=/dashboard/' if request.user.is_authenticated else '/accounts/google/login/')
                 else:
                     error = msg
             except InviteCode.DoesNotExist:
@@ -185,7 +190,7 @@ class GoogleDrivePersonalFilesView(GoogleConnectionAPIView):
         folder_id = request.query_params.get('folder_id') or (fellow.selected_drive_folder_id if fellow else None)
 
         try:
-            files = fetch_drive_folder_contents(request.user, folder_id=folder_id)
+            files = fetch_drive_folder_contents(request.user, folder_id=folder_id, search=request.query_params.get('q', '').strip())
             folder_name = (fellow.selected_drive_folder_name if (fellow and fellow.selected_drive_folder_id) else None)
             return Response({
                 'status': 'success',
@@ -432,60 +437,6 @@ class BadgesAPIView(APIView):
         })
 
 
-def seed_initial_prototype_tasks(fellow):
-    """Seed prototype tasks matching the design spec if fellow has no tasks."""
-    if Task.objects.filter(assigned_to=fellow).filter(
-        availability_task_visibility_filter(fellow)
-    ).exists():
-        return
-
-    prototype_deliverables = [
-        {
-            'title': 'Submit Community Needs Assessment',
-            'description': 'Upload your completed empathy-interview synthesis to the cohort folder.',
-            'scope': Task.Scope.TEAM,
-            'source': Task.Source.UNBOUND,
-            'status': Task.Status.PENDING,
-            'icon': 'fa-pen-to-square',
-            'color': '#00B4D8'
-        },
-        {
-            'title': 'Prototype Pitch Deck (v1)',
-            'description': 'Draft the 6-slide prototype pitch using the UNbound template.',
-            'scope': Task.Scope.TEAM,
-            'source': Task.Source.UNBOUND,
-            'status': Task.Status.PENDING,
-            'icon': 'fa-desktop',
-            'color': '#7c5cff'
-        },
-        {
-            'title': 'Complete Design-Thinking Module 3',
-            'description': 'Watch the Ideation lesson and submit your reflection.',
-            'scope': Task.Scope.PERSONAL,
-            'source': Task.Source.UNBOUND,
-            'status': Task.Status.PENDING,
-            'icon': 'fa-graduation-cap',
-            'color': '#e0a009'
-        },
-        {
-            'title': 'Map Your SDG Targets',
-            'description': 'Select the specific UN targets your project will measure against.',
-            'scope': Task.Scope.PERSONAL,
-            'source': Task.Source.UNBOUND,
-            'status': Task.Status.PENDING,
-            'icon': 'fa-wave-square',
-            'color': '#e82e2e'
-        }
-    ]
-
-    for item in prototype_deliverables:
-        Task.objects.create(
-            assigned_to=fellow,
-            cohort=fellow.cohort,
-            **item
-        )
-
-
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
 
@@ -493,7 +444,6 @@ class TaskViewSet(viewsets.ModelViewSet):
         if not hasattr(self.request.user, 'fellow_profile'):
             return Task.objects.none()
         fellow = self.request.user.fellow_profile
-        seed_initial_prototype_tasks(fellow)
 
         if fellow.cohort:
             qs = Task.objects.filter(
@@ -508,35 +458,58 @@ class TaskViewSet(viewsets.ModelViewSet):
         ).order_by('-created_at')
 
     def perform_create(self, serializer):
-        fellow = self.request.user.fellow_profile
+        fellow = getattr(self.request.user, 'fellow_profile', None)
+        if fellow is None:
+            raise PermissionDenied('A fellow profile is required to create tasks.')
         scope = serializer.validated_data.get('scope', Task.Scope.PERSONAL)
         icon = serializer.validated_data.get('icon') or ('fa-pen-to-square' if scope == Task.Scope.TEAM else 'fa-check')
         color = serializer.validated_data.get('color') or ('#00B4D8' if scope == Task.Scope.TEAM else '#e0a009')
 
-        task = serializer.save(
-            assigned_to=fellow,
-            cohort=fellow.cohort,
-            source=Task.Source.SELF,
-            icon=icon,
-            color=color,
-        )
-        if has_google_connection(self.request.user):
-            sync_task_to_google(self.request.user, task)
-        evaluate_and_sync_badges(fellow)
+        with transaction.atomic():
+            task = serializer.save(
+                assigned_to=fellow,
+                cohort=fellow.cohort,
+                source=Task.Source.SELF,
+                icon=icon,
+                color=color,
+            )
+            self._refresh_task_progress(task)
+        self._sync_google_mirrors(task)
+
+    def _refresh_task_progress(self, task):
+        for fellow in task.affected_fellows():
+            evaluate_and_sync_badges(fellow)
+
+    def _sync_google_mirrors(self, task):
+        # Each member's Google task is owned by that member's Google account.
+        users = {self.request.user.pk: self.request.user}
+        for link in task.google_links.select_related('user'):
+            users[link.user_id] = link.user
+        for user in users.values():
+            if has_google_connection(user):
+                sync_task_to_google(user, task)
 
     def perform_update(self, serializer):
-        task = serializer.save()
-        if has_google_connection(self.request.user):
-            sync_task_to_google(self.request.user, task)
-        evaluate_and_sync_badges(task.assigned_to)
+        with transaction.atomic():
+            task = serializer.save()
+            self._refresh_task_progress(task)
+        self._sync_google_mirrors(task)
 
     def perform_destroy(self, instance):
-        google_task_id = instance.google_task_id
-        fellow = instance.assigned_to
-        instance.delete()
-        if google_task_id and has_google_connection(self.request.user):
-            delete_task_from_google(self.request.user, google_task_id)
-        evaluate_and_sync_badges(fellow)
+        if not instance.can_manage(self.request.user):
+            raise PermissionDenied('Only the creator can delete a self-created task. Staff manage UNbound assignments.')
+        mirrors = {link.user_id: (link.user, link.google_task_id) for link in instance.google_links.select_related('user')}
+        if instance.scope == Task.Scope.PERSONAL and instance.google_task_id and instance.assigned_to_id:
+            owner = instance.assigned_to.user
+            mirrors.setdefault(owner.pk, (owner, instance.google_task_id))
+        with transaction.atomic():
+            fellows = list(instance.affected_fellows())
+            instance.delete()
+            for fellow in fellows:
+                evaluate_and_sync_badges(fellow)
+        for user, google_task_id in mirrors.values():
+            if google_task_id and has_google_connection(user):
+                delete_task_from_google(user, google_task_id)
 
 
 class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
@@ -564,17 +537,28 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        from .availability import request_for_fellow, mark_response_draft
         fellow = self.request.user.fellow_profile
-        avail_request = serializer.validated_data.get('availability_request')
-        if avail_request and (
-            not avail_request.is_active
-            or not avail_request.target_fellows().filter(pk=fellow.pk).exists()
-        ):
-            raise ValidationError({
-                'availability_request': 'This request is inactive or is not assigned to you.'
-            })
-        serializer.save(fellow=fellow)
-        evaluate_and_sync_badges(self.request.user.fellow_profile)
+        with transaction.atomic():
+            meeting = request_for_fellow(fellow, serializer.validated_data['availability_request'].pk, lock=True)
+            serializer.save(fellow=fellow)
+            mark_response_draft(meeting, fellow)
+
+    def perform_update(self, serializer):
+        from .availability import request_for_fellow, mark_response_draft
+        fellow = self.request.user.fellow_profile
+        with transaction.atomic():
+            meeting = request_for_fellow(fellow, serializer.instance.availability_request_id, lock=True)
+            serializer.save()
+            mark_response_draft(meeting, fellow)
+
+    def perform_destroy(self, instance):
+        from .availability import request_for_fellow, mark_response_draft
+        fellow = self.request.user.fellow_profile
+        with transaction.atomic():
+            meeting = request_for_fellow(fellow, instance.availability_request_id, lock=True)
+            instance.delete()
+            mark_response_draft(meeting, fellow)
 
     @action(detail=False, methods=['get'], url_path='requests')
     def requests(self, request):
@@ -592,6 +576,8 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
         else:
             qs = qs.filter(Q(assign_to_all=True) | Q(cohort__isnull=True))
 
+        for meeting in qs:
+            meeting.create_tasks_for_fellows(fellow=fellow)
         serializer = AvailabilityRequestSerializer(qs.order_by('-created_at'), many=True, context={'request': request})
         return Response({'status': 'success', 'requests': serializer.data})
 
@@ -600,72 +586,12 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
         if not hasattr(request.user, 'fellow_profile'):
             return Response({'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        from .availability import submit_availability
         fellow = request.user.fellow_profile
-        slots = request.data.get('slots', [])
-        req_id = request.data.get('request_id')
-
-        avail_request = None
-        if req_id:
-            try:
-                avail_request = AvailabilityRequest.objects.filter(
-                    pk=int(req_id),
-                    is_active=True,
-                ).first()
-            except (TypeError, ValueError):
-                avail_request = None
-            if (
-                not avail_request
-                or fellow.role != Fellow.Role.FELLOW
-                or not avail_request.target_fellows().filter(pk=fellow.pk).exists()
-            ):
-                return Response(
-                    {'detail': 'Active availability request not found.'},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-
-        updated_records = []
-        for s in slots:
-            date_str = s.get('date')
-            day = s.get('day_of_week')
-            hour = s.get('hour')
-            is_avail = bool(s.get('is_available', False))
-
-            if hour is None:
-                continue
-
-            if avail_request and date_str:
-                try:
-                    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-                except ValueError:
-                    continue
-                dow = (date_obj.weekday() + 1) % 7
-                obj, _ = MeetingAvailability.objects.update_or_create(
-                    availability_request=avail_request,
-                    fellow=fellow,
-                    date=date_obj,
-                    hour=hour,
-                    defaults={'day_of_week': dow, 'is_available': is_avail}
-                )
-                updated_records.append(obj)
-            elif day is not None:
-                obj, _ = MeetingAvailability.objects.update_or_create(
-                    fellow=fellow,
-                    day_of_week=day,
-                    hour=hour,
-                    defaults={'is_available': is_avail}
-                )
-                updated_records.append(obj)
-
-        if avail_request:
-            # Mark the auto-assigned task for this request as complete
-            Task.objects.filter(
-                assigned_to=fellow,
-                availability_request=avail_request
-            ).update(status=Task.Status.COMPLETE)
-
-        evaluate_and_sync_badges(fellow)
-        serializer = self.get_serializer(updated_records, many=True)
-        return Response({'status': 'success', 'slots': serializer.data})
+        with transaction.atomic():
+            records = submit_availability(fellow, request.data.get('request_id'), request.data.get('slots'))
+            evaluate_and_sync_badges(fellow)
+        return Response({'status': 'success', 'is_completed': True, 'slots': self.get_serializer(records, many=True).data})
 
     @action(detail=False, methods=['post'], url_path='sync-google')
     def sync_google(self, request):
@@ -700,7 +626,7 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
             slots = sync_user_calendar_availability(request.user, tz_str=tz_str, request_id=req_id)
             if hasattr(request.user, 'fellow_profile'):
                 evaluate_and_sync_badges(request.user.fellow_profile)
-            return Response({'connected': True, 'status': 'success', 'slots': slots})
+            return Response({'connected': True, 'status': 'success', 'is_completed': True, 'slots': slots})
         except GoogleIntegrationError as exc:
             return Response({'connected': True, 'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
@@ -972,21 +898,21 @@ class DashboardOverviewAPIView(APIView):
         first_name = user.first_name or (user.get_full_name().split()[0] if user.get_full_name() else user.email.split('@')[0])
 
         cohort = fellow.cohort
-        cohort_name = f"Cohort {cohort.name}" if cohort else "Cohort 2026–2027"
-        current_phase = cohort.current_phase if (cohort and cohort.current_phase) else "Launch Sequence"
-        project_name = cohort.project_name if (cohort and cohort.project_name) else "Bridges to Brighter Smiles"
+        cohort_name = f"Cohort {cohort.name}" if cohort else ""
+        current_phase = cohort.current_phase if cohort else ""
+        project_name = cohort.project_name if cohort else ""
         project_description = cohort.project_description if cohort else ""
 
         if fellow.chapter:
             chapter_str = f"{fellow.chapter.name}, {fellow.chapter.country_code}"
         else:
-            chapter_str = "Monterrey, MX"
+            chapter_str = ""
 
         team_members = []
         if cohort:
-            cohort_fellows = Fellow.objects.filter(cohort=cohort).select_related('user')
+            cohort_fellows = Fellow.objects.filter(cohort=cohort, user__is_active=True).select_related('user')
         else:
-            cohort_fellows = Fellow.objects.select_related('user').all()[:6]
+            cohort_fellows = Fellow.objects.none()
 
         for cf in cohort_fellows:
             sa = SocialAccount.objects.filter(user=cf.user, provider='google').first()
@@ -1013,18 +939,6 @@ class DashboardOverviewAPIView(APIView):
                     'name': sdg.name,
                     'color': sdg.color
                 })
-        else:
-            default_sdgs = SDG.objects.filter(code__in=[3, 4, 10])
-            if cohort:
-                cohort.selected_sdgs.set(default_sdgs)
-            for sdg in default_sdgs.order_by('code'):
-                sdgs_data.append({
-                    'code': sdg.code,
-                    'name': sdg.name,
-                    'color': sdg.color
-                })
-
-        seed_initial_prototype_tasks(fellow)
         if cohort:
             tasks_qs = Task.objects.filter(
                 Q(assigned_to=fellow) | (Q(scope=Task.Scope.TEAM) & Q(cohort=cohort))
@@ -1039,12 +953,12 @@ class DashboardOverviewAPIView(APIView):
         completed_tasks = tasks_qs.filter(status=Task.Status.COMPLETE).count()
         total_tasks = tasks_qs.count()
 
-        completion_pct = round((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 42
+        completion_pct = round((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 0
 
         evaluate_and_sync_badges(fellow)
         fellow_badges = FellowBadge.objects.filter(fellow=fellow)
         earned_badges = fellow_badges.filter(earned=True).count()
-        total_badges = fellow_badges.count() or 9
+        total_badges = fellow_badges.count()
 
         if earned_badges >= 9:
             level_name = "UNbound Legend"
@@ -1060,6 +974,7 @@ class DashboardOverviewAPIView(APIView):
             'first_name': first_name,
             'cohort_name': cohort_name,
             'current_phase': current_phase,
+            'phases': list(Phase.objects.values('id', 'name', 'description', 'order')),
             'project_name': project_name,
             'project_description': project_description,
             'chapter': chapter_str,

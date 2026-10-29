@@ -13,6 +13,8 @@ class GoogleDashboardApiTests(TestCase):
             password='safe-password',
         )
         self.client.force_login(self.user)
+        from .models import Fellow
+        Fellow.objects.create(user=self.user)
 
     def test_dashboard_uses_post_logout_button(self):
         response = self.client.get(reverse('dashboard'))
@@ -20,7 +22,7 @@ class GoogleDashboardApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'fellow-dashboard.html')
         self.assertContains(response, 'method="post" action="/accounts/logout/"')
-        self.assertContains(response, 'Google Tasks')
+        self.assertContains(response, 'Meeting Hub')
         self.assertNotContains(response, 'Lukah Villarreal')
 
     def test_login_uses_the_unbound_login_template(self):
@@ -67,7 +69,7 @@ class GoogleDashboardApiTests(TestCase):
         fetch_events.assert_called_once_with(self.user)
 
     @patch('fellows.views.has_google_connection', return_value=True)
-    @patch('fellows.views.fetch_drive_files')
+    @patch('fellows.views.fetch_drive_folder_contents')
     def test_google_drive_uses_search_query(self, fetch_files, _has_connection):
         fetch_files.return_value = [{'id': 'file-1', 'name': 'Project plan'}]
 
@@ -75,7 +77,7 @@ class GoogleDashboardApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['files'][0]['name'], 'Project plan')
-        fetch_files.assert_called_once_with(self.user, search='project')
+        fetch_files.assert_called_once_with(self.user, folder_id='', search='project')
 
     @patch('fellows.views.has_google_connection', return_value=True)
     @patch('fellows.views.fetch_google_tasks')

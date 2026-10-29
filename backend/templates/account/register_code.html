@@ -127,7 +127,13 @@
   <main class="login-wrap">
     <div class="login-card">
       <h1>Claim Invitation</h1>
-      <p class="login-intro">Enter the invitation code provided by Fellowship Execs to activate your new fellow account.</p>
+      {% if request.user.is_authenticated %}
+        <p class="login-intro">You are signed into the fellow portal as {{ request.user.get_username }}. This invitation will complete your fellow profile and connect the Google account you choose.</p>
+      {% else %}
+        <p class="login-intro">Enter the invitation code provided by Fellowship Execs to activate your new fellow account.</p>
+      {% endif %}
+
+      {% for message in messages %}<div class="error-box" role="status" style="margin-top:18px;">{{ message }}</div>{% endfor %}
 
       {% if error %}
         <div class="error-box" style="margin-top:18px;">{{ error }}</div>

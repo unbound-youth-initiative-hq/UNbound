@@ -12,8 +12,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+from urllib.parse import urlsplit, unquote, parse_qs
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
-load_dotenv() 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -25,12 +26,39 @@ load_dotenv(BASE_DIR / '.env')
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-e41onmyrl*j6jh647@1^ma$-1q3pmtto1^b*f+!+tl7f12@p8x'
+def env_bool(name, default=False):
+    return os.getenv(name, str(default)).lower() in ('true', '1', 'yes')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DJANGO_DEBUG', False)
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'development-only-unbound-key-never-use-in-production'
+    else:
+        raise ImproperlyConfigured('Set DJANGO_SECRET_KEY. For local development also set DJANGO_DEBUG=true.')
+if not DEBUG and (len(SECRET_KEY) < 50 or SECRET_KEY.startswith(('django-insecure-', 'development-only-'))):
+    raise ImproperlyConfigured('Production requires a unique DJANGO_SECRET_KEY of at least 50 characters.')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,[::1]' if DEBUG else '').split(',') if host.strip()]
+if os.getenv('WEBSITE_HOSTNAME'):
+    ALLOWED_HOSTS.append(os.environ['WEBSITE_HOSTNAME'])
+if not DEBUG and (not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS):
+    raise ImproperlyConfigured('Set explicit DJANGO_ALLOWED_HOSTS for production.')
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_NAME = 'unbound_portal_sessionid'
+ADMIN_SESSION_COOKIE_NAME = 'unbound_admin_sessionid'
+# CSRF secrets live inside the selected session rather than one host-wide cookie.
+CSRF_USE_SESSIONS = True
+SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', not DEBUG)
+SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '0' if DEBUG else '3600'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('DJANGO_HSTS_INCLUDE_SUBDOMAINS', False)
+SECURE_HSTS_PRELOAD = env_bool('DJANGO_HSTS_PRELOAD', False)
+# Enable only behind a trusted proxy that overwrites this header (Azure App Service).
+if env_bool('DJANGO_TRUST_PROXY_HEADERS', False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # Application definition
@@ -59,7 +87,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'fellows.session_middleware.IsolatedSessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -99,6 +128,24 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+database_url = os.getenv('DATABASE_URL', '')
+if database_url:
+    parsed = urlsplit(database_url)
+    if parsed.scheme not in ('postgres', 'postgresql'):
+        raise ImproperlyConfigured('DATABASE_URL must be a PostgreSQL connection URL.')
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': unquote(parsed.path.lstrip('/')),
+        'USER': unquote(parsed.username or ''),
+        'PASSWORD': unquote(parsed.password or ''),
+        'HOST': parsed.hostname or '',
+        'PORT': parsed.port or 5432,
+        'CONN_MAX_AGE': 60,
+        'CONN_HEALTH_CHECKS': True,
+        'OPTIONS': {'sslmode': parse_qs(parsed.query).get('sslmode', ['require'])[0]},
+    }
+elif not DEBUG:
+    raise ImproperlyConfigured('Set DATABASE_URL for the production PostgreSQL database.')
 
 
 # Password validation
@@ -139,6 +186,13 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+CSRF_FAILURE_VIEW = 'fellows.errors.csrf_failure'
 
 # ──────────────────────────────────────────────
 # Authentication & allauth settings
@@ -205,11 +259,13 @@ REST_FRAMEWORK = {
     ]
 }
 SOCIALACCOUNT_ADAPTER = 'fellows.adapter.UnboundSocialAccountAdapter'
+ACCOUNT_ADAPTER = 'fellows.adapter.UnboundAccountAdapter'
 
 # ──────────────────────────────────────────────
 # Email Configuration
 # ──────────────────────────────────────────────
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 't')

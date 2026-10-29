@@ -1,4 +1,6 @@
 from django.utils import timezone
+from django.db import transaction
+from django.db.models import Q
 
 DEFAULT_BADGES = [
     {
@@ -108,20 +110,24 @@ def ensure_default_badges_exist():
         Badge.objects.get_or_create(slug=item['slug'], defaults=item)
 
 
+@transaction.atomic
 def evaluate_and_sync_badges(fellow):
-    from .models import Badge, FellowBadge, Task, MeetingAvailability
+    from .models import Badge, Fellow, FellowBadge, Task, AvailabilitySubmission
+
+    if fellow is None:
+        return 0
+    # Serialize progress updates for this fellow so overlapping task/submission
+    # requests cannot overwrite XP calculated from a newer completion.
+    locked_fellow = Fellow.objects.select_for_update().get(pk=fellow.pk)
 
     ensure_default_badges_exist()
 
-    completed_task_count = Task.objects.filter(
-        assigned_to=fellow,
-        status=Task.Status.COMPLETE
-    ).count()
+    task_audience = Q(assigned_to=fellow)
+    if fellow.cohort_id:
+        task_audience |= Q(scope=Task.Scope.TEAM, cohort_id=fellow.cohort_id)
+    completed_task_count = Task.objects.filter(task_audience, status=Task.Status.COMPLETE).count()
 
-    has_availability = MeetingAvailability.objects.filter(
-        fellow=fellow,
-        is_available=True
-    ).exists()
+    has_availability = AvailabilitySubmission.objects.filter(fellow=fellow).exists()
 
     badges = Badge.objects.all().order_by('order')
     total_xp = 0
@@ -165,8 +171,9 @@ def evaluate_and_sync_badges(fellow):
 
         fb.save()
 
-    if fellow.xp_points != total_xp:
-        fellow.xp_points = total_xp
-        fellow.save(update_fields=['xp_points'])
+    if locked_fellow.xp_points != total_xp:
+        locked_fellow.xp_points = total_xp
+        locked_fellow.save(update_fields=['xp_points'])
+    fellow.xp_points = total_xp
 
     return total_xp

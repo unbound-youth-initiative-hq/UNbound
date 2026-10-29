@@ -41,17 +41,47 @@ class Chapter(models.Model):
         ordering = ['name']
 
 
+class Phase(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    description = models.CharField(max_length=240, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'pk']
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        # Preserve existing badge rules when staff rename a phase.
+        from django.db import transaction
+        with transaction.atomic():
+            old_name = type(self).objects.filter(pk=self.pk).values_list('name', flat=True).first() if self.pk else None
+            super().save(*args, **kwargs)
+            if old_name and old_name != self.name:
+                Badge.objects.filter(required_phase=old_name).update(required_phase=self.name)
+
+
 class Cohort(models.Model):
     """Cohort holding shared project data, status phase, and UN goals."""
     name = models.CharField(max_length=100)
     project_name = models.CharField(max_length=200, blank=True, help_text="Name of the cohort's project")
     project_description = models.TextField(blank=True, help_text="Detailed summary of the cohort's project")
-    current_phase = models.CharField(max_length=50, default='Orbit of Ideas', help_text="Current phase/status of the cohort project")
+    phase = models.ForeignKey(Phase, on_delete=models.PROTECT, null=True, blank=True, related_name='cohorts', verbose_name='Current phase')
     selected_sdgs = models.ManyToManyField(SDG, blank=True, related_name='cohorts', help_text="Selected UN Sustainable Development Goals")
 
     start_date = models.DateField()
     end_date = models.DateField()
     is_active = models.BooleanField(default=True)
+
+    @property
+    def current_phase(self):
+        return self.phase.name if self.phase_id else ''
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValidationError({'end_date': 'End date must be on or after the start date.'})
 
     def __str__(self):
         if self.project_name:
@@ -93,10 +123,12 @@ class InviteCode(models.Model):
         return True, "Valid code"
 
     def mark_as_used(self, user):
-        self.times_used += 1
-        if self.times_used >= self.max_uses:
-            self.is_active = False
-        self.save()
+        from django.core.exceptions import ValidationError
+        eligible = type(self).objects.filter(pk=self.pk, is_active=True, times_used__lt=models.F('max_uses')).filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now()))
+        if not eligible.update(times_used=models.F('times_used') + 1):
+            raise ValidationError('This invitation is no longer available. Request a new code.')
+        type(self).objects.filter(pk=self.pk, times_used__gte=models.F('max_uses')).update(is_active=False)
+        self.refresh_from_db()
 
     def __str__(self):
         status = "Active" if self.is_active else "Inactive"
@@ -170,7 +202,7 @@ class Fellow(models.Model):
 
     @property
     def current_phase(self):
-        return self.cohort.current_phase if self.cohort else "Orbit of Ideas"
+        return self.cohort.current_phase if self.cohort else ""
 
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.username} ({self.get_role_display()})"
@@ -241,6 +273,23 @@ class Task(models.Model):
         blank=True,
         related_name='tasks'
     )
+
+    def can_manage(self, user):
+        """Only the creator can change or delete a self-created assignment."""
+        fellow = getattr(user, 'fellow_profile', None)
+        return bool(
+            fellow and self.source == self.Source.SELF
+            and self.assigned_to_id == fellow.pk
+        )
+
+    def affected_fellows(self):
+        """Fellows whose progress includes this task, including shared work."""
+        audience = models.Q(pk=self.assigned_to_id)
+        if self.scope == self.Scope.TEAM and self.cohort_id:
+            audience |= models.Q(cohort_id=self.cohort_id)
+        return Fellow.objects.filter(
+            audience, role=Fellow.Role.FELLOW, user__is_active=True,
+        ).select_related('user', 'cohort').order_by('pk')
 
     @classmethod
     def assign_task(
@@ -363,6 +412,18 @@ class Task(models.Model):
         ordering = ['-created_at']
 
 
+class GoogleTaskLink(models.Model):
+    """Google task IDs belong to one Google user, even for shared assignments."""
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='google_links')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    google_task_id = models.CharField(max_length=200)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['task', 'user'], name='unique_task_google_user'),
+        ]
+
+
 class AvailabilityRequest(models.Model):
     """When to meet / availability request created by admin for a specific cohort or all fellows."""
     title = models.CharField(max_length=200, help_text="e.g. Sprint 3 Sync Availability")
@@ -370,7 +431,7 @@ class AvailabilityRequest(models.Model):
     start_date = models.DateField(help_text="Start date of the availability window.")
     end_date = models.DateField(help_text="End date of the availability window.")
     start_hour = models.PositiveSmallIntegerField(default=9, help_text="Starting hour (0-23, default 9 for 9 AM).")
-    end_hour = models.PositiveSmallIntegerField(default=18, help_text="Ending hour (0-23, default 18 for 6 PM).")
+    end_hour = models.PositiveSmallIntegerField(default=18, help_text="Ending hour, exclusive (1-24; 24 is midnight).")
 
     cohort = models.ForeignKey(
         'Cohort',
@@ -402,6 +463,43 @@ class AvailabilityRequest(models.Model):
         related_name='created_availability_requests'
     )
 
+    def clean(self):
+        from datetime import date
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+        if isinstance(self.start_date, date) and isinstance(self.end_date, date):
+            if self.end_date < self.start_date:
+                errors['end_date'] = 'End date must be on or after the start date.'
+            elif (self.end_date - self.start_date).days >= 42:
+                errors['end_date'] = 'A meeting request can cover at most 42 days.'
+        if isinstance(self.start_hour, int) and not 0 <= self.start_hour <= 23:
+            errors['start_hour'] = 'Choose a starting hour from 0 to 23.'
+        if isinstance(self.end_hour, int) and not 1 <= self.end_hour <= 24:
+            errors['end_hour'] = 'Choose an ending hour from 1 to 24 (midnight).'
+        if isinstance(self.start_hour, int) and isinstance(self.end_hour, int) and self.end_hour <= self.start_hour:
+            errors['end_hour'] = 'Ending hour must be after the starting hour.'
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        from django.db import transaction
+
+        self.full_clean()
+        with transaction.atomic():
+            previous = type(self).objects.select_for_update().filter(pk=self.pk).first() if self.pk else None
+            window_changed = previous and any(
+                getattr(previous, name) != getattr(self, name)
+                for name in ('start_date', 'end_date', 'start_hour', 'end_hour')
+            )
+            super().save(*args, **kwargs)
+            if window_changed:
+                # A response to the previous dates/hours is not a submission to the new window.
+                self.availability_slots.all().delete()
+                self.submissions.all().delete()
+                self.tasks.update(status=Task.Status.PENDING)
+            self.create_tasks_for_fellows()
+
     def target_fellows(self):
         """Active fellow accounts who should receive this availability request."""
         target_fellows = Fellow.objects.filter(
@@ -412,30 +510,41 @@ class AvailabilityRequest(models.Model):
             target_fellows = target_fellows.filter(cohort_id=self.cohort_id)
         return target_fellows.select_related('user', 'cohort')
 
-    def create_tasks_for_fellows(self):
-        """Create or ensure one UNbound availability task per active target fellow."""
+    def create_tasks_for_fellows(self, fellow=None):
+        """Reconcile active recipients and task metadata without changing valid submissions."""
+        from django.db import transaction
+
         if not self.is_active:
             return []
-
-        created_tasks = []
-        for fellow in self.target_fellows():
-            task, _ = Task.objects.get_or_create(
-                assigned_to=fellow,
-                availability_request=self,
-                defaults={
+        with transaction.atomic():
+            # All creation paths lock the request, preventing duplicate task creation.
+            type(self).objects.select_for_update().get(pk=self.pk)
+            targets = self.target_fellows()
+            if fellow is not None:
+                targets = targets.filter(pk=fellow.pk)
+            tasks = []
+            for recipient in targets:
+                values = {
                     'title': f"When2meet: {self.title}",
                     'description': self.description or f"Submit your availability for {self.start_date.strftime('%b %d')} – {self.end_date.strftime('%b %d')}.",
                     'scope': Task.Scope.PERSONAL,
-                    'status': Task.Status.PENDING,
                     'source': Task.Source.UNBOUND,
                     'icon': 'fa-calendar-check',
                     'color': '#00B4D8',
                     'due_date': self.deadline or self.start_date,
-                    'cohort': fellow.cohort,
+                    'cohort': recipient.cohort,
                 }
-            )
-            created_tasks.append(task)
-        return created_tasks
+                task, created = Task.objects.get_or_create(
+                    assigned_to=recipient,
+                    availability_request=self,
+                    defaults={**values, 'status': Task.Status.PENDING},
+                )
+                if not created:
+                    for name, value in values.items():
+                        setattr(task, name, value)
+                    task.save(update_fields=list(values))
+                tasks.append(task)
+            return tasks
 
     def __str__(self):
         target = "All Cohorts" if self.assign_to_all or not self.cohort else f"Cohort {self.cohort.name}"
@@ -445,6 +554,23 @@ class AvailabilityRequest(models.Model):
         ordering = ['-created_at']
         verbose_name = "When to Meet Request"
         verbose_name_plural = "When to Meet Requests"
+
+
+class AvailabilitySubmission(models.Model):
+    """A submitted response, including a response with no available time slots."""
+    availability_request = models.ForeignKey(
+        AvailabilityRequest, on_delete=models.CASCADE, related_name='submissions'
+    )
+    fellow = models.ForeignKey(Fellow, on_delete=models.CASCADE, related_name='availability_submissions')
+    submitted_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=['availability_request', 'fellow'], name='unique_availability_submission'
+        )]
+
+    def __str__(self):
+        return f"{self.fellow} — {self.availability_request.title} (submitted)"
 
 
 class MeetingAvailability(models.Model):
@@ -527,3 +653,23 @@ class FellowBadge(models.Model):
 
     class Meta:
         unique_together = ['fellow', 'badge']
+
+
+class ReminderBatch(models.Model):
+    import uuid
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    queued_at = models.DateTimeField(null=True, blank=True)
+
+
+class ReminderDelivery(models.Model):
+    batch = models.ForeignKey(ReminderBatch, on_delete=models.CASCADE, related_name='deliveries')
+    fellow = models.ForeignKey(Fellow, on_delete=models.CASCADE)
+    email = models.EmailField()
+    body = models.TextField()
+    state = models.CharField(max_length=12, default='draft', choices=[(s, s.title()) for s in ('draft', 'queued', 'sending', 'sent', 'previewed', 'failed')])
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['batch', 'fellow'], name='unique_reminder_batch_fellow')]

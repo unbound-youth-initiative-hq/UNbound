@@ -1,0 +1,21 @@
+# Running UNbound
+
+Sign in at `/admin/`. The home page has shortcuts for daily work.
+
+- **Fellows:** connect a user to a cohort/chapter and choose the fellowship role. Fellowship role does not grant staff access. Administrators grant Staff status and the UNbound coordinators group under Users. Token fields are excluded from the operator form.
+- **Cohorts:** maintain dates, project details, goals, and select the current phase. Manage phase names, descriptions and order under Phases; the student roadmap uses the same catalog. Referenced phases cannot be deleted.
+- **Assignments:** Add opens the guided assignment form. Select a person, a cohort, or everyone, then choose individual or shared-team work. A team task is one shared completion; an individual task must be completed by each fellow. Completed records stay in the assignments list; filter by status to find them.
+- **Meeting requests:** choose a cohort or all fellows and a date/hour window (maximum 42 days). The ending hour is exclusive; 24 means midnight. All-busy responses count as submitted. Changing dates or hours clears old responses and requests resubmission. Updating instructions/deadline updates linked tasks.
+- **Reminders:** the Fellows page previews each active fellow their incomplete assignments, with UNbound and meeting requests first. Console mode is the default, including production until deliberately changed: messages go to server logs, not inboxes. Real sending is still a separate release decision. Review the recipient preview, then confirm the batch once. Duplicate submissions of a batch are ignored. Real deliveries are queued; the operator must schedule `python manage.py send_pending_reminders` as a worker. Inspect Reminder deliveries for status. A `sending` record left after an interruption needs manual review; never blindly retry it.
+- **Badges:** names/descriptions and earning rules are editable. Manual awards are on the Fellow's badge rows. Custom image upload is not included yet.
+- **Invitations:** choose an explicit cohort and role. A blank cohort leaves a new fellow unassigned. The default code is single-use. Existing Google login is unchanged.
+
+### Independent staff and fellow sign-in
+
+Staff sign into `/admin/` with their staff username and password. Fellows sign into `/dashboard/` with Google, using an invitation only to enroll initially. Each fellow has an internal user record; this never grants Admin access. Admin and portal use separate sessions and separate session-backed CSRF secrets, so different people can be signed into the two areas in the same browser. Logging out of one area keeps the other signed in.
+
+Admin login never creates a Fellow profile or links a Google identity. A staff member can also be a fellow if explicitly enrolled; staff permissions are assigned separately. Google identities are never automatically attached to existing local accounts merely because emails match. Explicit linking is available only to an authenticated portal account, using verified Google credentials and an invitation when enrollment is incomplete.
+
+After upgrading to the isolated sessions, reopen both login pages once. Old shared cookies are ignored. This does not delete accounts, identity links, assignments, or invitations. A form opened before the upgrade may need reloading. CSRF protection remains enforced; an expired form provides a safe recovery page.
+
+Setup administrator: run `python manage.py setup_staff_group` after migrations. The command creates permissions but grants no users access. Only a trusted administrator should assign that group and Staff status.

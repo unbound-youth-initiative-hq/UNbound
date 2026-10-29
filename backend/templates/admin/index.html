@@ -1,0 +1,14 @@
+{% extends "admin/index.html" %}
+{% block content %}
+<div class="module" style="padding:16px;margin-bottom:20px">
+<h2>Daily work</h2>
+<p>Use these shortcuts to run the fellowship. Configuration and detailed records are listed below.</p>
+<ul>
+{% if perms.fellows.add_task %}<li><a href="{% url 'admin:fellows_task_assign' %}">Assign work to fellows or teams</a></li>{% endif %}
+{% if perms.fellows.view_fellow %}<li><a href="{% url 'admin:fellows_fellow_changelist' %}">Manage fellows and pending-task reminders</a></li>{% endif %}
+{% if perms.fellows.view_availabilityrequest %}<li><a href="{% url 'admin:fellows_availabilityrequest_changelist' %}">Request availability and track responses</a></li>{% endif %}
+{% if perms.fellows.view_cohort %}<li><a href="{% url 'admin:fellows_cohort_changelist' %}">Update cohort projects and phases</a></li>{% endif %}
+</ul>
+</div>
+{{ block.super }}
+{% endblock %}

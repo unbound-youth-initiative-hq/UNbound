@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from django.views.generic import RedirectView
+from django.contrib.auth.views import LogoutView
 from fellows import views
 
 router = DefaultRouter()
@@ -9,6 +10,7 @@ router.register(r'tasks', views.TaskViewSet, basename='task')
 router.register(r'meetings', views.MeetingAvailabilityViewSet, basename='meeting')
 
 urlpatterns = [
+    path('admin/logout/', LogoutView.as_view(next_page='/admin/login/'), name='admin-logout'),
     path('admin/', admin.site.urls),
     path('accounts/register/', views.register_code_view, name='register_code'),
     path('accounts/', include('allauth.urls')),

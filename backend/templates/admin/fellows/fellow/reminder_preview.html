@@ -1,0 +1,7 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p>{% if console_mode %}Preview mode: messages will appear in the server logs, with no inbox delivery.{% else %}Messages will be queued for the delivery worker. Each fellow receives only their own task summary.{% endif %}</p>
+<p><strong>{{ deliveries|length }} recipient(s)</strong> with incomplete assignments. Fellows without an email or pending work are excluded.</p>
+{% for delivery in deliveries %}<details><summary>{{ delivery.email }}</summary><pre style="white-space:pre-wrap">{{ delivery.body }}</pre></details>{% empty %}<p>There are no reminders to send.</p>{% endfor %}
+{% if deliveries %}<form method="post">{% csrf_token %}<input type="hidden" name="batch_id" value="{{ batch.pk }}"><div class="submit-row"><input type="submit" class="default" value="{% if console_mode %}Write previews to logs{% else %}Queue reminders{% endif %}"><a href="{% url 'admin:fellows_fellow_changelist' %}">Cancel</a></div></form>{% endif %}
+{% endblock %}

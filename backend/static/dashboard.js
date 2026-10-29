@@ -1,23 +1,31 @@
 /* ===== UNbound Fellow Dashboard Complete JS ===== */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
+  document.querySelectorAll('[data-dashboard-notice]').forEach(notice => {
+    let timer;
+    let dismissed = false;
+    const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      clearTimeout(timer);
+      notice.classList.add('is-dismissing');
+      setTimeout(() => notice.remove(), 250);
+    };
+    notice.querySelector('[data-dismiss-notice]')?.addEventListener('click', dismiss);
+    const schedule = () => {
+      clearTimeout(timer);
+      if (notice.hasAttribute('data-auto-dismiss') && !dismissed) timer = setTimeout(dismiss, 3000);
+    };
+    notice.addEventListener('mouseenter', () => clearTimeout(timer));
+    notice.addEventListener('mouseleave', schedule);
+    notice.addEventListener('focusin', () => clearTimeout(timer));
+    notice.addEventListener('focusout', schedule);
+    schedule();
+  });
+  const { escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup } = window.UNboundUI;
 
-  /* ---------- CSRF Token Helper ---------- */
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-  const csrftoken = getCookie('csrftoken');
+  /* The portal's CSRF secret belongs to its session, independently of Admin. */
+  const csrftoken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
   /* ---------- Persisted dashboard accent ---------- */
   const accentChoices = Array.from(document.querySelectorAll('[data-accent-choice]'));
@@ -78,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
         body: JSON.stringify({ accent_palette: palette })
       })
-        .then(response => response.json().then(data => ({ response, data })))
+        .then(response => readJsonResponse(response).then(data => ({ response, data })))
         .then(({ response, data }) => {
           if (!response.ok || data.status !== 'success') throw new Error(data.detail || 'Unable to save preference.');
           if (accentStatus) accentStatus.textContent = 'Color saved to your profile.';
@@ -122,9 +130,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadDashboardOverview() {
     fetch('/api/dashboard/overview/')
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         if (data.status === 'success') {
+          const statusEl = document.getElementById('dashboardLoadStatus');
+          if (statusEl) statusEl.textContent = '';
           const fnEl = document.getElementById('dashFirstName');
           const cNameEl = document.getElementById('dashCohortName');
           const cPhaseEl = document.getElementById('dashCurrentPhase');
@@ -132,20 +142,20 @@ document.addEventListener('DOMContentLoaded', () => {
           const bannerPhaseEl = document.getElementById('dashBannerPhase');
           const chapterEl = document.getElementById('dashChapter');
 
-          if (fnEl) fnEl.textContent = data.first_name;
-          if (cNameEl) cNameEl.textContent = data.cohort_name;
-          if (cPhaseEl) cPhaseEl.textContent = data.current_phase;
-          if (projEl) projEl.textContent = data.project_name;
-          if (bannerPhaseEl) bannerPhaseEl.textContent = data.current_phase;
-          if (chapterEl) chapterEl.textContent = data.chapter;
+          if (fnEl) fnEl.textContent = data.first_name || 'Fellow';
+          if (cNameEl) cNameEl.textContent = data.cohort_name || 'No cohort assigned';
+          if (cPhaseEl) cPhaseEl.textContent = data.current_phase || 'Not assigned';
+          if (projEl) projEl.textContent = data.project_name || 'No project assigned yet';
+          if (bannerPhaseEl) bannerPhaseEl.textContent = data.current_phase || 'Not assigned';
+          if (chapterEl) chapterEl.textContent = data.chapter || 'Not assigned';
 
           document.getElementById('dashOpenTasks').textContent = data.stats.open_tasks;
           document.getElementById('dashCompletedTasks').textContent = data.stats.completed_tasks;
           document.getElementById('dashBadgesEarned').textContent = data.stats.earned_badges;
           document.getElementById('dashBadgesTotal').textContent = data.stats.total_badges;
           document.getElementById('dashLevelName').textContent = data.stats.level_name;
-          document.getElementById('dashCompletionPct').textContent = `${data.stats.completion_pct}%`;
-          document.getElementById('dashCompletionFill').style.width = `${data.stats.completion_pct}%`;
+          document.getElementById('dashCompletionPct').textContent = `${percentage(data.stats.completion_pct)}%`;
+          document.getElementById('dashCompletionFill').style.width = `${percentage(data.stats.completion_pct)}%`;
 
           // Render Google Profile Pictures
           renderTeamAvatars(data.team_members);
@@ -154,11 +164,15 @@ document.addEventListener('DOMContentLoaded', () => {
           renderSdgPills(data.sdgs);
 
           // Highlight Active Phase Step
-          highlightPhaseStep(data.current_phase);
+          renderPhases(data.phases, data.current_phase);
 
           // Render Next Up Calendar Events
           loadNextUpEvents();
         }
+      })
+      .catch(error => {
+        const message = document.getElementById('dashboardLoadStatus');
+        if (message) message.textContent = error.message || 'Unable to load your workspace. Please refresh.';
       });
   }
 
@@ -172,8 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     container.innerHTML = sdgs.map(s => `
-      <div class="sdg-pill" style="--sdg-color: ${s.color || '#00B4D8'};">
-        <span class="sdg-num">${s.code}</span> ${s.name}
+      <div class="sdg-pill" style="--sdg-color: ${safeColor(s.color)};">
+        <span class="sdg-num">${escapeHtml(s.code)}</span> ${escapeHtml(s.name)}
       </div>
     `).join('');
   }
@@ -203,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sdgPickerGrid.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Fetching UN goals...</div>`;
 
     fetch('/api/cohort/sdgs/')
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         if (data.status === 'success' && data.sdgs) {
           localSdgSelection.clear();
@@ -226,11 +240,11 @@ document.addEventListener('DOMContentLoaded', () => {
     sdgPickerGrid.innerHTML = allSdgs.map(s => {
       const isSel = localSdgSelection.has(s.code);
       return `
-        <div class="sdg-picker-item ${isSel ? 'selected' : ''}" 
-             style="--picker-color: ${s.color || '#00B4D8'};" 
-             data-code="${s.code}">
-          <span class="sdg-picker-num">${s.code}</span>
-          <span class="sdg-picker-name">${s.name}</span>
+        <div class="sdg-picker-item ${isSel ? 'selected' : ''}"
+             style="--picker-color: ${safeColor(s.color)};"
+             data-code="${escapeHtml(s.code)}">
+          <span class="sdg-picker-num">${escapeHtml(s.code)}</span>
+          <span class="sdg-picker-name">${escapeHtml(s.name)}</span>
           <i class="fa-solid fa-circle-check sdg-check-icon"></i>
         </div>
       `;
@@ -272,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       body: JSON.stringify({ sdg_codes: Array.from(localSdgSelection) })
     })
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         btnSaveSdgs.disabled = false;
         btnSaveSdgs.innerHTML = `Save SDGs`;
@@ -300,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!container) return;
 
     if (!members || members.length === 0) {
-      container.innerHTML = `<div class="team-avatar-circle">F</div>`;
+      container.innerHTML = '<span class="empty-state">No team assigned yet.</span>';
       return;
     }
 
@@ -310,11 +324,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let html = visible.map(m => {
       if (m.picture) {
-        return `<div class="team-avatar-circle" title="${m.name} (${m.role})">
-                  <img src="${m.picture}" alt="${m.name}" referrerpolicy="no-referrer" />
+        return `<div class="team-avatar-circle" title="${escapeHtml(m.name)} (${escapeHtml(m.role)})">
+                  <img src="${escapeHtml(safeUrl(m.picture, ''))}" alt="${escapeHtml(m.name)}" referrerpolicy="no-referrer" />
                 </div>`;
       } else {
-        return `<div class="team-avatar-circle" title="${m.name} (${m.role})">${m.initials}</div>`;
+        return `<div class="team-avatar-circle" title="${escapeHtml(m.name)} (${escapeHtml(m.role)})">${escapeHtml(m.initials)}</div>`;
       }
     }).join('');
 
@@ -325,21 +339,9 @@ document.addEventListener('DOMContentLoaded', () => {
     container.innerHTML = html;
   }
 
-  function highlightPhaseStep(currentPhase) {
-    const steps = document.querySelectorAll('.phase-step');
-    let reachedActive = false;
-
-    steps.forEach(step => {
-      const pName = step.getAttribute('data-phase');
-      if (pName.toLowerCase() === currentPhase.toLowerCase()) {
-        step.className = 'phase-step active';
-        reachedActive = true;
-      } else if (!reachedActive) {
-        step.className = 'phase-step completed';
-      } else {
-        step.className = 'phase-step';
-      }
-    });
+  function renderPhases(phases, currentPhase) {
+    const container = document.getElementById('phaseRoadmap');
+    if (container) container.innerHTML = phaseRoadmapMarkup(phases, currentPhase);
   }
 
   function requestCalendarEvents(range = null) {
@@ -350,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     return fetch(url)
-      .then(response => response.json().then(data => ({ response, data })))
+      .then(response => readJsonResponse(response).then(data => ({ response, data })))
       .then(({ response, data }) => {
         if (!response.ok || data.connected === false) {
           throw new Error(data.detail || 'Unable to load Google Calendar events.');
@@ -510,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (personalTasksList) personalTasksList.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading personal tasks...</div>`;
 
     fetch('/api/tasks/')
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         const tasks = Array.isArray(data) ? data : (data.results || []);
 
@@ -535,44 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderTaskCardsGroup(containerEl, taskGroup, emptyMessage) {
     if (!containerEl) return;
-    if (taskGroup.length === 0) {
-      containerEl.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
-      return;
-    }
-
-    containerEl.innerHTML = taskGroup.map(t => {
-      const iconClass = t.icon || (t.scope === 'team' ? 'fa-pen-to-square' : 'fa-check');
-      const boxColor = t.color || (t.scope === 'team' ? '#00B4D8' : '#e0a009');
-      const isUnbound = t.source === 'unbound';
-
-      return `
-        <div class="proto-task-card ${t.status === 'complete' ? 'completed' : ''}">
-          <div class="proto-task-icon-box" style="background-color: ${boxColor};">
-            <i class="fa-solid ${iconClass}"></i>
-          </div>
-          <div class="proto-task-content">
-            ${isUnbound ? `<div class="source-badge"><i class="fa-solid fa-globe"></i> ASSIGNED BY UNBOUND</div>` : ''}
-            <div class="proto-task-title">${t.title}</div>
-            ${t.description ? `<div class="proto-task-desc">${t.description}</div>` : ''}
-            ${t.availability_request_id || (t.title && t.title.toLowerCase().includes('when2meet')) ? `
-              <button class="btn btn-ghost btn-open-w2m-task" type="button" onclick="openWhenToMeet(${t.availability_request_id || ''})">
-                <i class="fa-solid fa-calendar-check" style="color: var(--accent);"></i> Open When to Meet
-              </button>
-            ` : ''}
-          </div>
-          <div class="proto-task-actions">
-            <select class="status-select-pill ${t.status}" onchange="updateTaskStatus(${t.id}, this.value)">
-              <option value="pending" ${t.status === 'pending' ? 'selected' : ''}>Pending</option>
-              <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
-              <option value="complete" ${t.status === 'complete' ? 'selected' : ''}>Completed</option>
-            </select>
-            <button class="task-delete" title="Delete Task" onclick="deleteTask(${t.id})">
-              <i class="fa-solid fa-trash"></i>
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
+    containerEl.innerHTML = taskCardsMarkup(taskGroup, emptyMessage);
   }
 
   window.updateTaskStatus = function (taskId, status) {
@@ -584,11 +549,11 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       body: JSON.stringify({ status })
     })
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(() => {
         loadTasks();
       })
-      .catch(() => alert('Failed to update task status.'));
+      .catch(error => { alert(error.message || 'Failed to update task status.'); loadTasks(); });
   };
 
   window.deleteTask = function (taskId) {
@@ -625,11 +590,12 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         body: JSON.stringify({ title, scope: 'team', icon: 'fa-pen-to-square', color: '#00B4D8' })
       })
-        .then(res => res.json())
+        .then(readJsonResponse)
         .then(() => {
           input.value = '';
           loadTasks();
-        });
+        })
+        .catch(error => alert(error.message || 'Could not create task. Your text has been kept.'));
     });
   }
 
@@ -649,11 +615,12 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         body: JSON.stringify({ title, scope: 'personal', icon: 'fa-user-check', color: '#e0a009' })
       })
-        .then(res => res.json())
+        .then(readJsonResponse)
         .then(() => {
           input.value = '';
           loadTasks();
-        });
+        })
+        .catch(error => alert(error.message || 'Could not create task. Your text has been kept.'));
     });
   }
 
@@ -721,17 +688,17 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="file-info">
         <i class="fa-solid ${iconClass}"></i>
         <div class="file-text">
-          <a href="${file.webViewLink || '#'}" target="_blank" class="file-name" title="${file.name}">
-            ${file.name}
+          <a href="${escapeHtml(safeUrl(file.webViewLink))}" target="_blank" rel="noopener noreferrer" class="file-name" title="${escapeHtml(file.name)}">
+            ${escapeHtml(file.name)}
           </a>
           <span class="file-meta">
-            ${isFolder ? 'Folder' : ownerName} • Modified ${modified}
+            ${escapeHtml(isFolder ? 'Folder' : ownerName)} • Modified ${escapeHtml(modified)}
           </span>
         </div>
       </div>
       <div class="file-actions">
-        ${isFolder && isPersonal ? `<button class="btn btn-sm btn-ghost btn-subfolder" data-folder-id="${file.id}" data-folder-name="${file.name}"><i class="fa-solid fa-folder-open"></i> Open</button>` : ''}
-        <a href="${file.webViewLink || '#'}" target="_blank" class="btn btn-sm btn-ghost" title="Open in Google Drive">
+        ${isFolder && isPersonal ? `<button class="btn btn-sm btn-ghost btn-subfolder" data-folder-id="${escapeHtml(file.id)}" data-folder-name="${escapeHtml(file.name)}"><i class="fa-solid fa-folder-open"></i> Open</button>` : ''}
+        <a href="${escapeHtml(safeUrl(file.webViewLink))}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost" title="Open in Google Drive">
           <i class="fa-solid fa-arrow-up-right-from-square"></i>
         </a>
       </div>
@@ -760,11 +727,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     fetch(url)
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         if (data.status === 'success' || data.connected) {
           if (data.selected_folder_name) {
-            personalFolderStatus.innerHTML = `<i class="fa-solid fa-folder"></i> ${data.selected_folder_name}`;
+            personalFolderStatus.innerHTML = `<i class="fa-solid fa-folder"></i> ${escapeHtml(data.selected_folder_name)}`;
           } else {
             personalFolderStatus.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> Recent Files (No folder linked)`;
           }
@@ -792,7 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sharedFileList.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Fetching shared workspace files...</div>`;
 
     fetch('/api/google-drive/shared-files/')
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         sharedFileList.innerHTML = '';
         if (data.status === 'success' || data.connected) {
@@ -818,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
     folderSelectList.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Fetching your Drive folders...</div>`;
 
     fetch('/api/google-drive/folders/')
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         folderSelectList.innerHTML = '';
         if ((data.status === 'success' || data.connected) && data.folders && data.folders.length > 0) {
@@ -828,7 +795,7 @@ document.addEventListener('DOMContentLoaded', () => {
             div.innerHTML = `
               <div class="folder-select-info">
                 <i class="fa-solid fa-folder"></i>
-                <span>${folder.name}</span>
+                <span>${escapeHtml(folder.name)}</span>
               </div>
               <button class="btn btn-sm btn-primary select-folder-btn">Select</button>
             `;
@@ -857,7 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       body: JSON.stringify({ folder_id: folderId, folder_name: folderName })
     })
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         if (data.status === 'success') {
           closeFolderModal();
@@ -880,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
       personalBreadcrumbs.innerHTML = `
         <span class="breadcrumb-item" id="bcRoot"><i class="fa-solid fa-house"></i> Main Folder</span>
         <span class="breadcrumb-separator"><i class="fa-solid fa-chevron-right"></i></span>
-        <span class="breadcrumb-item active"><i class="fa-solid fa-folder-open"></i> ${folderName}</span>
+        <span class="breadcrumb-item active"><i class="fa-solid fa-folder-open"></i> ${escapeHtml(folderName)}</span>
       `;
       document.getElementById('bcRoot').addEventListener('click', () => {
         currentNavFolderId = null;
@@ -951,6 +918,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let userSlotsMap = {};
   let isMouseDown = false;
   let dragTargetState = null;
+  let availabilitySaveQueue = Promise.resolve();
+  let availabilityEditVersion = 0;
+  let availabilityLoadedFor = null;
 
   window.openWhenToMeet = function (requestId = null) {
     showView('meetings');
@@ -1000,7 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadMeetingHub(preferredRequestId = null) {
     fetch('/api/meetings/requests/')
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         const bannerEl = document.getElementById('w2mRequestBanner');
         const emptyEl = document.getElementById('w2mEmptyState');
@@ -1036,15 +1006,25 @@ document.addEventListener('DOMContentLoaded', () => {
           if (twoColEl) twoColEl.style.display = 'none';
         }
       })
-      .catch(() => {
-        loadUserAvailabilityGrid();
-        loadGroupAvailabilityGrid();
+      .catch(error => {
+        const empty = document.getElementById('w2mEmptyState');
+        if (empty) { empty.style.display = 'block'; empty.textContent = error.message || 'Unable to load meeting requests. Please refresh.'; }
       });
   }
 
   function renderRequestBanner() {
     if (!currentRequestData) return;
     const req = currentRequestData;
+    currentStartHour = Number(req.start_hour);
+    currentEndHour = Number(req.end_hour);
+    currentDates = [];
+    const start = new Date(`${req.start_date}T12:00:00`);
+    const end = new Date(`${req.end_date}T12:00:00`);
+    for (let day = new Date(start); day <= end && currentDates.length < 42; day.setDate(day.getDate() + 1)) {
+      currentDates.push({ date: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`,
+        dayName: day.toLocaleDateString('en-US', { weekday: 'short' }), monthName: day.toLocaleDateString('en-US', { month: 'short' }),
+        dayNum: day.getDate(), dayOfWeek: day.getDay(), isToday: day.toDateString() === new Date().toDateString() });
+    }
 
     const titleEl = document.getElementById('w2mRequestTitle');
     const descEl = document.getElementById('w2mRequestDesc');
@@ -1087,8 +1067,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (activeMeetingRequests.length > 1) {
         selectorWrap.style.display = 'flex';
         selectEl.innerHTML = activeMeetingRequests.map(r => `
-          <option value="${r.id}" ${r.id === currentRequestId ? 'selected' : ''}>
-            ${r.title} (${formatShortDate(r.start_date)} - ${formatShortDate(r.end_date)})
+          <option value="${recordId(r.id) || ''}" ${r.id === currentRequestId ? 'selected' : ''}>
+            ${escapeHtml(r.title)} (${escapeHtml(formatShortDate(r.start_date))} - ${escapeHtml(formatShortDate(r.end_date))})
           </option>
         `).join('');
 
@@ -1112,14 +1092,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const gridEl = document.getElementById('myAvailabilityGrid');
     if (!gridEl) return;
 
+    availabilityLoadedFor = null;
+    gridEl.textContent = 'Loading your availability…';
+    const requestedId = currentRequestId;
+    const editVersion = availabilityEditVersion;
     let url = '/api/meetings/';
     if (currentRequestId) {
       url += `?request_id=${currentRequestId}`;
     }
 
     fetch(url)
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
+        if (requestedId !== currentRequestId || editVersion !== availabilityEditVersion) return;
+        availabilityLoadedFor = requestedId;
         userSlotsMap = {};
         const slots = Array.isArray(data) ? data : (data.results || []);
         slots.forEach(s => {
@@ -1131,8 +1117,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         renderUserGrid();
       })
-      .catch(() => {
-        renderUserGrid();
+      .catch(error => {
+        if (requestedId === currentRequestId) { gridEl.textContent = error.message || 'Could not load availability. Please refresh.'; }
       });
   }
 
@@ -1147,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const last = week[week.length - 1];
       let html = `
         <div class="availability-week-block">
-          <div class="availability-week-heading">${first.monthName} ${first.dayNum} – ${last.monthName} ${last.dayNum}</div>
+          <div class="availability-week-heading">${escapeHtml(first.monthName)} ${escapeHtml(first.dayNum)} – ${escapeHtml(last.monthName)} ${escapeHtml(last.dayNum)}</div>
           <div class="availability-grid-container" style="grid-template-columns: 52px repeat(${week.length}, minmax(42px, 1fr));">
             <div class="grid-header-cell"></div>
       `;
@@ -1155,14 +1141,14 @@ document.addEventListener('DOMContentLoaded', () => {
       week.forEach(date => {
         html += `
           <div class="grid-header-cell ${date.isToday ? 'today-header' : ''}">
-            <div class="grid-header-day">${date.dayName} ${date.isToday ? '•' : ''}</div>
-            <div class="grid-header-date">${date.monthName} ${date.dayNum}</div>
+            <div class="grid-header-day">${escapeHtml(date.dayName)} ${date.isToday ? '•' : ''}</div>
+            <div class="grid-header-date">${escapeHtml(date.monthName)} ${escapeHtml(date.dayNum)}</div>
           </div>
         `;
       });
 
       for (let hour = startHour; hour < endHour; hour++) {
-        const hourLabel = hour > 12 ? `${hour - 12} PM` : (hour === 12 ? '12 PM' : `${hour} AM`);
+        const hourLabel = hour > 12 ? `${hour - 12} PM` : (hour === 12 ? '12 PM' : `${hour || 12} AM`);
         html += `<div class="grid-time-label">${hourLabel}</div>`;
         week.forEach(date => { html += renderCell(date, hour); });
       }
@@ -1177,15 +1163,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!gridEl) return;
 
     const dates = (currentDates && currentDates.length > 0) ? currentDates : getFallbackWeekDayDates();
-    const startH = currentStartHour || 9;
-    const endH = currentEndHour || 18;
+    const startH = currentStartHour ?? 9;
+    const endH = currentEndHour ?? 18;
 
     gridEl.innerHTML = renderAvailabilityWeeks(dates, startH, endH, (date, hour) => {
       const slotKey = date.date ? `${date.date}_${hour}` : `${date.dayOfWeek}_${hour}`;
       const isAvail = !!userSlotsMap[slotKey];
       return `
         <div class="grid-cell ${isAvail ? 'active' : ''} ${date.isToday ? 'today-cell' : ''}"
-             data-date="${date.date || ''}" data-day="${date.dayOfWeek}" data-hour="${hour}"></div>
+             data-date="${escapeHtml(date.date || '')}" data-day="${escapeHtml(date.dayOfWeek)}" data-hour="${hour}"></div>
       `;
     });
 
@@ -1348,6 +1334,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function toggleCellState(cell, date, day, hour, newState) {
+    availabilityEditVersion++;
     cell.classList.toggle('active', newState);
     if (date) {
       userSlotsMap[`${date}_${hour}`] = newState;
@@ -1357,9 +1344,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function saveUserAvailability(showToast = false) {
+    if (!currentRequestId || availabilityLoadedFor !== currentRequestId) return;
+    const savedRequestId = currentRequestId;
+    const savedVersion = availabilityEditVersion;
     const dates = (currentDates && currentDates.length > 0) ? currentDates : getFallbackWeekDayDates();
-    const startH = currentStartHour || 9;
-    const endH = currentEndHour || 18;
+    const startH = currentStartHour ?? 9;
+    const endH = currentEndHour ?? 18;
 
     const slots = [];
     dates.forEach(d => {
@@ -1379,40 +1369,34 @@ document.addEventListener('DOMContentLoaded', () => {
       payload.request_id = currentRequestId;
     }
 
-    fetch('/api/meetings/bulk-save/', {
+    const toast = document.getElementById('w2mSaveToast');
+    if (toast) { toast.style.display = 'inline-flex'; toast.textContent = 'Saving availability…'; }
+    availabilitySaveQueue = availabilitySaveQueue.catch(() => {}).then(() => fetch('/api/meetings/bulk-save/', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': csrftoken
-      },
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
       body: JSON.stringify(payload)
-    })
-      .then(res => res.json())
-      .then(data => {
-        loadGroupAvailabilityGrid();
-
-        const hasActive = Object.values(userSlotsMap).some(Boolean);
-        const statusPill = document.getElementById('w2mStatusPill');
-        if (statusPill && hasActive) {
-          statusPill.textContent = '✓ Submitted';
-          statusPill.className = 'w2m-status-pill completed';
-        }
-
-        const toast = document.getElementById('w2mSaveToast');
-        if (toast) {
-          toast.style.display = 'inline-flex';
-          toast.innerHTML = `<i class="fa-solid fa-circle-check"></i> Saved & Task Updated!`;
-          setTimeout(() => {
-            toast.style.display = 'none';
-          }, 2600);
-        }
-      });
+    })).then(readJsonResponse).then(data => {
+      if (savedRequestId !== currentRequestId || savedVersion !== availabilityEditVersion) return;
+      if (data.is_completed !== true) throw new Error('The server did not confirm your submission. Please try again.');
+      if (currentRequestData) currentRequestData.is_completed = true;
+      const statusPill = document.getElementById('w2mStatusPill');
+      if (statusPill) { statusPill.textContent = '✓ Submitted'; statusPill.className = 'w2m-status-pill completed'; }
+      if (toast) { toast.style.display = 'inline-flex'; toast.textContent = 'Availability saved. Assignment completed.'; }
+      loadGroupAvailabilityGrid();
+    }).catch(error => {
+      if (savedRequestId !== currentRequestId || savedVersion !== availabilityEditVersion) return;
+      if (toast) { toast.style.display = 'inline-flex'; toast.textContent = `${error.message || 'Unable to save.'} Your changes are still here; select Submit Availability to retry.`; }
+      const statusPill = document.getElementById('w2mStatusPill');
+      if (statusPill) { statusPill.textContent = 'Unsaved changes'; statusPill.className = 'w2m-status-pill'; }
+    });
+    return availabilitySaveQueue;
   }
 
   function loadGroupAvailabilityGrid() {
     const gridEl = document.getElementById('groupAvailabilityGrid');
     if (!gridEl) return;
 
+    const requestedId = currentRequestId;
     const tz = document.getElementById('tzSelect')?.value || 'America/Monterrey';
     let url = `/api/meetings/group-availability/?timezone=${encodeURIComponent(tz)}`;
     if (currentRequestId) {
@@ -1420,18 +1404,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     fetch(url)
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
+        if (requestedId !== currentRequestId) return;
         if (data.status === 'success') {
           if (data.dates && data.dates.length > 0) {
             currentDates = data.dates;
           }
-          if (data.start_hour) currentStartHour = data.start_hour;
-          if (data.end_hour) currentEndHour = data.end_hour;
+          if (data.start_hour !== undefined) currentStartHour = data.start_hour;
+          if (data.end_hour !== undefined) currentEndHour = data.end_hour;
 
           renderGroupGrid(data.matrix, data.total_members);
-          renderUserGrid();
         }
+      }).catch(error => {
+        if (requestedId === currentRequestId) gridEl.textContent = error.message || 'Could not load group availability.';
       });
   }
 
@@ -1440,8 +1426,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!gridEl) return;
 
     const dates = (currentDates && currentDates.length > 0) ? currentDates : getFallbackWeekDayDates();
-    const startH = currentStartHour || 9;
-    const endH = currentEndHour || 18;
+    const startH = currentStartHour ?? 9;
+    const endH = currentEndHour ?? 18;
 
     const matrixMap = {};
     (Array.isArray(matrix) ? matrix : []).forEach(m => {
@@ -1449,12 +1435,13 @@ document.addEventListener('DOMContentLoaded', () => {
       matrixMap[key] = m;
     });
 
-    const accentRgb = getComputedStyle(document.body).getPropertyValue('--accent-rgb').trim() || '0, 180, 216';
+    const rawAccent = getComputedStyle(document.body).getPropertyValue('--accent-rgb').trim();
+    const accentRgb = /^\d{1,3},\s*\d{1,3},\s*\d{1,3}$/.test(rawAccent) ? rawAccent : '0, 180, 216';
     gridEl.innerHTML = renderAvailabilityWeeks(dates, startH, endH, (date, hour) => {
       const slotKey = date.date ? `${date.date}_${hour}` : `${date.dayOfWeek}_${hour}`;
       const info = matrixMap[slotKey] || { available_count: 0, available_members: [] };
-      const count = info.available_count;
-      const ratio = totalMembers > 0 ? count / totalMembers : 0;
+      const count = Math.max(0, Number(info.available_count) || 0);
+      const ratio = totalMembers > 0 ? Math.min(1, count / totalMembers) : 0;
 
       let alpha = 0.05;
       if (ratio > 0) alpha = 0.25 + 0.75 * ratio;
@@ -1472,7 +1459,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="grid-cell group-cell ${isGroupEvent ? 'group-event-cell' : ''} ${date.isToday ? 'today-cell' : ''}"
              style="${bgStyle} ${textStyle}">
           ${count > 0 ? count : ''}
-          <div class="grid-cell-tooltip">${tooltipText}</div>
+          <div class="grid-cell-tooltip">${escapeHtml(tooltipText)}</div>
         </div>
       `;
     });
@@ -1498,7 +1485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         body: JSON.stringify(payload)
       })
-        .then(res => res.json())
+        .then(readJsonResponse)
         .then(data => {
           btnSyncCalendar.disabled = false;
           btnSyncCalendar.innerHTML = `<i class="fa-brands fa-google"></i> Sync with Google Calendar`;
@@ -1526,6 +1513,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnClearMy = document.getElementById('btnClearMyAvailability');
   if (btnClearMy) {
     btnClearMy.addEventListener('click', () => {
+      if (availabilityLoadedFor !== currentRequestId) return;
+      availabilityEditVersion++;
       userSlotsMap = {};
       renderUserGrid();
       saveUserAvailability();
@@ -1550,7 +1539,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gridEl.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading milestones...</div>`;
 
     fetch('/api/badges/')
-      .then(res => res.json())
+      .then(readJsonResponse)
       .then(data => {
         if (data.status === 'success') {
           const numEl = document.getElementById('bannerRingNumber');
@@ -1577,13 +1566,13 @@ document.addEventListener('DOMContentLoaded', () => {
               return `
                 <div class="badge-card earned">
                   <div class="badge-icon-rail">
-                    <div class="badge-icon-circle" style="background-color: ${b.color || '#00B4D8'};">
-                      <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
+                    <div class="badge-icon-circle" style="background-color: ${safeColor(b.color)};">
+                      <i class="fa-solid ${safeIcon(b.icon_class)}"></i>
                     </div>
                   </div>
                   <div class="badge-copy">
-                    <div class="badge-title">${b.name}</div>
-                    <div class="badge-desc">${b.description}</div>
+                    <div class="badge-title">${escapeHtml(b.name)}</div>
+                    <div class="badge-desc">${escapeHtml(b.description)}</div>
                   </div>
                   <div class="badge-progress-column"><div class="badge-status-pill earned"><i class="fa-solid fa-check"></i> EARNED</div></div>
                 </div>
@@ -1593,19 +1582,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="badge-card unearned">
                   <div class="badge-icon-rail">
                     <div class="badge-icon-circle">
-                      <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
+                      <i class="fa-solid ${safeIcon(b.icon_class)}"></i>
                     </div>
                   </div>
                   <div class="badge-copy">
-                    <div class="badge-title">${b.name}</div>
-                    <div class="badge-desc">${b.description}</div>
+                    <div class="badge-title">${escapeHtml(b.name)}</div>
+                    <div class="badge-desc">${escapeHtml(b.description)}</div>
                   </div>
                   <div class="badge-progress-column">
                     <div class="badge-progress-wrap">
                       <div class="badge-progress-bar">
-                        <div class="badge-progress-fill" style="width: ${b.progress}%;"></div>
+                        <div class="badge-progress-fill" style="width: ${percentage(b.progress)}%;"></div>
                       </div>
-                      <div class="badge-progress-text">${b.progress}% COMPLETE</div>
+                      <div class="badge-progress-text">${percentage(b.progress)}% COMPLETE</div>
                     </div>
                   </div>
                 </div>
@@ -1615,12 +1604,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="badge-card unearned">
                   <div class="badge-icon-rail">
                     <div class="badge-icon-circle">
-                      <i class="fa-solid ${b.icon_class || 'fa-award'}"></i>
+                      <i class="fa-solid ${safeIcon(b.icon_class)}"></i>
                     </div>
                   </div>
                   <div class="badge-copy">
-                    <div class="badge-title">${b.name}</div>
-                    <div class="badge-desc">${b.description}</div>
+                    <div class="badge-title">${escapeHtml(b.name)}</div>
+                    <div class="badge-desc">${escapeHtml(b.description)}</div>
                   </div>
                   <div class="badge-progress-column"><div class="badge-status-pill locked"><i class="fa-solid fa-lock"></i> LOCKED</div></div>
                 </div>
