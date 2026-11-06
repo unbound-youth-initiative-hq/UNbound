@@ -3,6 +3,7 @@ import os
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 os.environ['DJANGO_DEBUG'] = 'true'
 os.environ['DJANGO_SECRET_KEY'] = 'isolated-test-key-not-for-production'
+os.environ['GOOGLE_INTEGRATIONS_ENABLED'] = 'false'
 os.environ.pop('DATABASE_URL', None)
 from .settings import *  # noqa: E402,F403
 DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}

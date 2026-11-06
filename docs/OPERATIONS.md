@@ -2,6 +2,8 @@
 
 Sign in at `/admin/`. The home page has shortcuts for daily work.
 
+The launch configuration uses Google for identity only. Fellows still use invitations, UNbound assignments, manual meeting availability, cohorts/phases, badges and personalization. Drive browsing/shared-file discovery, Calendar events/conflict highlighting/import, and Google Tasks mirrors are deferred. Staff can share ordinary Drive or Calendar links separately using Google’s sharing permissions. No Google Workspace subscription is required for this sign-in mode. See [LAUNCH.md](LAUNCH.md) for deployment and re-enabling details.
+
 - **Fellows:** connect a user to a cohort/chapter and choose the fellowship role. Fellowship role does not grant staff access. Administrators grant Staff status and the UNbound coordinators group under Users. Token fields are excluded from the operator form.
 - **Cohorts:** maintain dates, project details, goals, and select the current phase. Manage phase names, descriptions and order under Phases; the student roadmap uses the same catalog. Referenced phases cannot be deleted.
 - **Assignments:** Add opens the guided assignment form. Select a person, a cohort, or everyone, then choose individual or shared-team work. A team task is one shared completion; an individual task must be completed by each fellow. Completed records stay in the assignments list; filter by status to find them.

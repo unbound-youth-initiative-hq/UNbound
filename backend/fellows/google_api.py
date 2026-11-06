@@ -20,7 +20,18 @@ class GoogleConnectionError(GoogleIntegrationError):
     """Raised when the signed-in user needs to connect or reconnect Google."""
 
 
+class GoogleIntegrationDisabled(GoogleIntegrationError):
+    """Data integrations are deliberately unavailable in the launch build."""
+
+
+def require_google_integrations():
+    if not settings.GOOGLE_INTEGRATIONS_ENABLED:
+        raise GoogleIntegrationDisabled('Google Calendar, Drive and Tasks integrations are not enabled.')
+
+
 def has_google_connection(user):
+    if not settings.GOOGLE_INTEGRATIONS_ENABLED:
+        return False
     return SocialToken.objects.filter(
         account__user=user,
         account__provider='google',
@@ -28,6 +39,8 @@ def has_google_connection(user):
 
 
 def get_google_credentials(user):
+    # Also protects against using refresh/access tokens saved before launch mode.
+    require_google_integrations()
     token = SocialToken.objects.filter(
         account__user=user,
         account__provider='google',
@@ -64,7 +77,7 @@ def get_google_credentials(user):
         try:
             credentials.refresh(google.auth.transport.requests.Request())
         except Exception as exc:
-            logger.warning('Google token refresh failed: %s', exc)
+            logger.warning('Google token refresh failed (%s)', type(exc).__name__)
             raise GoogleConnectionError('Your Google connection has expired. Please reconnect it.') from exc
 
         token.token = credentials.token
@@ -79,7 +92,7 @@ def _google_service(name, version, user):
 
 
 def _api_error(action, exc):
-    logger.warning('Google %s request failed: %s', action, exc)
+    logger.warning('Google %s request failed (%s)', action, type(exc).__name__)
     raise GoogleIntegrationError('Google could not complete that request. Please try again.') from exc
 
 
@@ -176,7 +189,7 @@ def fetch_shared_calendar_events_in_range(user, shared_email=None, time_min=None
         ).execute()
         return events_result.get('items', [])
     except Exception as exc:
-        logger.info('Could not fetch shared calendar events (%s): %s', cal_id, exc)
+        logger.info('Could not fetch shared calendar events (%s)', type(exc).__name__)
         return []
 
 
@@ -185,6 +198,7 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey', request_id
     Syncs the user's primary Google Calendar events into MeetingAvailability records.
     Requires an active assigned request and submits its complete grid atomically.
     """
+    require_google_integrations()
     from .models import MeetingAvailability, AvailabilityRequest, Task
 
     fellow = getattr(user, 'fellow_profile', None)
@@ -377,6 +391,8 @@ def delete_google_task(user, task_id):
 
 def sync_task_to_google(user, task):
     """Mirror a task in the acting user's account, never reuse another user's ID."""
+    if not settings.GOOGLE_INTEGRATIONS_ENABLED:
+        return None
     from django.db import transaction
     from .models import GoogleTaskLink, Task
 

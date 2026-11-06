@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from .google_api import sync_user_calendar_availability
@@ -117,6 +117,7 @@ class AvailabilityIntegrityTests(TestCase):
                 with self.assertRaises(ValidationError):
                     meeting.save()
 
+    @override_settings(GOOGLE_INTEGRATIONS_ENABLED=True)
     @patch('fellows.google_api.fetch_calendar_events_in_range')
     def test_google_sync_records_all_busy_submission(self, fetch):
         fetch.return_value = [{'start': {'date': '2026-11-01'}, 'end': {'date': '2026-11-02'}}]
@@ -125,6 +126,7 @@ class AvailabilityIntegrityTests(TestCase):
         self.assertFalse(any(slot['is_available'] for slot in slots))
         self.assertEqual(AvailabilitySubmission.objects.filter(fellow=self.fellow).count(), 1)
 
+    @override_settings(GOOGLE_INTEGRATIONS_ENABLED=True)
     @patch('fellows.google_api.fetch_calendar_events_in_range')
     def test_google_failure_preserves_previous_submission(self, fetch):
         self.submit(self.grid(True))

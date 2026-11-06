@@ -1,6 +1,7 @@
 /* ===== UNbound Fellow Dashboard Complete JS ===== */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
+  const googleIntegrationsEnabled = document.body.dataset.googleIntegrationsEnabled === 'true';
   document.querySelectorAll('[data-dashboard-notice]').forEach(notice => {
     let timer;
     let dismissed = false;
@@ -101,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- Navigation / View Switcher ---------- */
   window.showView = function (name) {
+    if (!googleIntegrationsEnabled && ['drive', 'calendar'].includes(name)) name = 'overview';
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
     document.querySelectorAll('.sb-nav .nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
     const sb = document.getElementById('sidebar');
@@ -114,9 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (name === 'tasks') {
       loadTasks();
     } else if (name === 'calendar') {
-      loadCalendar('calendarEvents');
+      if (googleIntegrationsEnabled) loadCalendar('calendarEvents');
     } else if (name === 'meetings') {
-      loadCalendar('calendarEvents');
+      if (googleIntegrationsEnabled) loadCalendar('calendarEvents');
       loadMeetingHub();
     } else if (name === 'badges') {
       loadBadges();
@@ -345,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function requestCalendarEvents(range = null) {
+    if (!googleIntegrationsEnabled) return Promise.resolve([]);
     let url = '/api/google/calendar/';
     if (range) {
       const params = new URLSearchParams({ time_min: range.timeMin, time_max: range.timeMax });
@@ -480,6 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadNextUpEvents() {
+    if (!googleIntegrationsEnabled) return;
     const listEl = document.getElementById('dashNextUpList');
     if (!listEl) return;
     setCalendarMessage(listEl, 'Loading upcoming events…', 'loading');
@@ -490,6 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   window.loadCalendar = function (targetId = 'calendarEvents') {
+    if (!googleIntegrationsEnabled) return;
     const listEl = document.getElementById(targetId);
     if (!listEl) return;
     setCalendarMessage(listEl, 'Loading calendar events…', 'loading');
@@ -718,6 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadPersonalFiles(folderId = null) {
+    if (!googleIntegrationsEnabled) return;
     if (!personalFileList) return;
     personalFileList.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Fetching personal files...</div>`;
 
@@ -755,6 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSharedFiles() {
+    if (!googleIntegrationsEnabled) return;
     if (!sharedFileList) return;
     sharedFileList.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Fetching shared workspace files...</div>`;
 
@@ -781,6 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadUserFolders() {
+    if (!googleIntegrationsEnabled) return;
     if (!folderSelectList) return;
     folderSelectList.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Fetching your Drive folders...</div>`;
 
@@ -816,6 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function saveSelectedFolder(folderId, folderName = '') {
+    if (!googleIntegrationsEnabled) return;
     fetch('/api/google-drive/set-folder/', {
       method: 'POST',
       headers: {
@@ -1257,6 +1266,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadAvailabilityConflictEvents(dates) {
+    if (!googleIntegrationsEnabled) return;
     const validDates = dates.filter(date => date.date);
     const key = makeAvailabilityConflictKey(validDates);
     if (!key) return;
@@ -1466,7 +1476,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const btnSyncCalendar = document.getElementById('btnSyncGoogleCalendar');
-  if (btnSyncCalendar) {
+  if (btnSyncCalendar && googleIntegrationsEnabled) {
     btnSyncCalendar.addEventListener('click', () => {
       const tz = document.getElementById('tzSelect')?.value || 'America/Monterrey';
       btnSyncCalendar.disabled = true;

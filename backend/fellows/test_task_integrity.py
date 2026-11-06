@@ -3,7 +3,7 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from .google_api import GoogleIntegrationError, sync_task_to_google
@@ -110,6 +110,7 @@ class TaskIntegrityTests(TestCase):
             response = self.client.post('/api/tasks/', {'title': 'Test', **payload}, format='json')
             self.assertEqual(response.status_code, 400)
 
+    @override_settings(GOOGLE_INTEGRATIONS_ENABLED=True)
     @patch('fellows.google_api._google_service')
     def test_shared_google_mirrors_are_separate_and_completed_on_first_insert(self, service_factory):
         task = self.task(scope=Task.Scope.TEAM, assigned_to=None, status=Task.Status.COMPLETE, google_task_id='unknown-legacy-owner')
@@ -127,6 +128,7 @@ class TaskIntegrityTests(TestCase):
         sync_task_to_google(self.peer.user, task)
         self.assertEqual(second.tasks.return_value.patch.call_args.kwargs['task'], 'peer-google')
 
+    @override_settings(GOOGLE_INTEGRATIONS_ENABLED=True)
     @patch('fellows.google_api._google_service')
     def test_personal_legacy_mirror_only_adopted_by_its_owner(self, service_factory):
         task = self.task(google_task_id='legacy-owned')
@@ -136,6 +138,7 @@ class TaskIntegrityTests(TestCase):
         sync_task_to_google(self.owner.user, task)
         self.assertEqual(service_factory.return_value.tasks.return_value.patch.call_args.kwargs['task'], 'legacy-owned')
 
+    @override_settings(GOOGLE_INTEGRATIONS_ENABLED=True)
     @patch('fellows.google_api._google_service', side_effect=GoogleIntegrationError('Offline'))
     def test_google_outage_does_not_undo_shared_completion(self, _service):
         task = self.task(scope=Task.Scope.TEAM, assigned_to=None)

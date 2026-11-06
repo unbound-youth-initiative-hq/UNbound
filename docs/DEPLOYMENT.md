@@ -1,6 +1,6 @@
 # Delivery build
 
-Base: GitHub `testing/backend` at f597e5b. Working branch: codex/delivery-readiness.
+Delivery target: the GitHub `basic-launch` branch. The complete Google-integrated version is retained on `testing/backend`. This checkout contains the identity-only launch configuration. See [LAUNCH.md](LAUNCH.md) for Google setup, deferred features, acceptance checks and access to the previous complete build.
 
 ## Local setup
 
@@ -19,14 +19,15 @@ Deploy the contents of `backend/` as the app root. Use a supported Python 3.14 r
 - DJANGO_TRUST_PROXY_HEADERS=true only on Azure's trusted proxy
 - DATABASE_URL: PostgreSQL URL; percent-encode credentials; SSL required by default
 - SITE_BASE_URL: the public HTTPS URL
-- GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET and GOOGLE_SHARED_WORKSPACE_EMAIL
+- GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+- GOOGLE_INTEGRATIONS_ENABLED=false (the default). Calendar, Drive and Google Tasks are deferred. GOOGLE_SHARED_WORKSPACE_EMAIL is unused in this mode.
 - EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend until real sending is separately approved
 
-After a database backup, run migrations as one release step, then `collectstatic --noinput` and `check --deploy`. Startup command: `sh start.sh`. Do not migrate from each worker. Enable HTTPS Only in Azure. Django intentionally leaves HSTS include-subdomains and preloading off until domain ownership/TLS coverage is confirmed. This produces W005/W021 from check --deploy; enable DJANGO_HSTS_INCLUDE_SUBDOMAINS and DJANGO_HSTS_PRELOAD only after reviewing all subdomains and the preload requirements. Configure the Google OAuth production callback `/accounts/google/login/callback/` and consent verification as applicable. Production configuration fails early for missing secrets, hostnames or PostgreSQL URL.
+After a database backup, run migrations as one release step, then `collectstatic --noinput` and `check --deploy`. Startup command: `sh start.sh`. Do not migrate from each worker. Enable HTTPS Only in Azure. Django intentionally leaves HSTS include-subdomains and preloading off until domain ownership/TLS coverage is confirmed. This produces W005/W021 from check --deploy; enable DJANGO_HSTS_INCLUDE_SUBDOMAINS and DJANGO_HSTS_PRELOAD only after reviewing all subdomains and the preload requirements. Register the exact public HTTPS Google OAuth callback ending in `/accounts/google/login/callback/`. Configure Google Auth Platform Data Access for identity scopes only (`openid`, email, profile), remove Calendar/Drive/Tasks scopes from the launch project configuration, and review Branding/Audience before releasing. Basic sign-in does not require sensitive/restricted-scope verification, but branding requirements are separate. See LAUNCH.md. The app no longer requests offline access or stores new Google API tokens in launch mode. Old tokens are left intact but cannot be used by the disabled integrations. Production configuration fails early for missing secrets, hostnames or PostgreSQL URL.
 
 When enabling real email, schedule `python manage.py send_pending_reminders` as a recurring worker job (one process per run). The Admin action queues deliveries; it does not send SMTP inside the web request. Console previews are processed immediately. Review failed/uncertain deliveries before any manual requeue.
 
-WhiteNoise serves collected static assets. User-uploaded badge images are not yet supported by this build; add persistent storage before enabling them. Retain database backups, restrict its network access, and establish monitoring/cost alerts in the actual subscription.
+WhiteNoise serves collected static assets. User-uploaded badge images are not yet supported by this build; add persistent storage before enabling them. Retain database backups, restrict its network access, and establish monitoring/cost alerts in the actual subscription. Gunicorn access logs omit query strings and referrers to avoid logging OAuth codes. Check Azure platform logs and Application Insights separately for query-string capture before using real accounts.
 
 ## Data preservation
 

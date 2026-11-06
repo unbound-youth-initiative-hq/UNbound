@@ -216,28 +216,35 @@ ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*']
 ACCOUNT_EMAIL_VERIFICATION = 'none' # For development, skip email verification
 
+# Launch with identity only. Enable data integrations only after configuring
+# Google's consent screen and completing any applicable verification.
+GOOGLE_INTEGRATIONS_ENABLED = env_bool('GOOGLE_INTEGRATIONS_ENABLED', False)
+
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
+        'provider_class': 'fellows.google_provider.UnboundGoogleProvider',
         'APP': {
             'client_id': os.getenv('GOOGLE_CLIENT_ID', ''),
             'secret': os.getenv('GOOGLE_CLIENT_SECRET', ''),
             'key': ''
         },
         'SCOPE': [
+            'openid',
             'profile',
             'email',
+        ] + ([
             'https://www.googleapis.com/auth/calendar.readonly',
             'https://www.googleapis.com/auth/drive.metadata.readonly',
             'https://www.googleapis.com/auth/tasks',
-        ],
+        ] if GOOGLE_INTEGRATIONS_ENABLED else []),
         'AUTH_PARAMS': {
-            'access_type': 'offline',
-            'prompt': 'select_account consent',
+            'access_type': 'offline' if GOOGLE_INTEGRATIONS_ENABLED else 'online',
+            'prompt': 'select_account consent' if GOOGLE_INTEGRATIONS_ENABLED else 'select_account',
         }
     }
 }
 
-SOCIALACCOUNT_STORE_TOKENS = True
+SOCIALACCOUNT_STORE_TOKENS = GOOGLE_INTEGRATIONS_ENABLED
 
 # Email address whose Drive files are shared with fellows.
 GOOGLE_SHARED_WORKSPACE_EMAIL = (

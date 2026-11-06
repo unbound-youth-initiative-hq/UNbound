@@ -105,7 +105,7 @@ class AuthenticationSessionTests(TestCase):
         self.assertRedirects(response, '/dashboard/', fetch_redirect_response=False)
         self.assert_portal_user(user)
         self.assertEqual(SocialAccount.objects.get(uid='test-google-uid').user_id, user.pk)
-        self.assertTrue(SocialToken.objects.filter(account__user=user).exists())
+        self.assertFalse(SocialToken.objects.filter(account__user=user).exists())
 
     def test_linked_portal_identity_repeated_login_requires_no_invitation(self):
         user = self.portal_user()

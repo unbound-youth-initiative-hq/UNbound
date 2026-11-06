@@ -68,7 +68,8 @@ def google_account_details(user):
     data = account.extra_data if account else {}
     name = data.get('name') or user.get_full_name() or user.email or user.username
     return {
-        'connected': has_google_connection(user),
+        # A Google identity remains connected without storing data API tokens.
+        'connected': account is not None,
         'name': name,
         'email': data.get('email') or user.email,
         'picture': data.get('picture', ''),
@@ -83,6 +84,7 @@ def dashboard_view(request):
         return redirect('register_code')
     return render(request, 'fellow-dashboard.html', {
         'google_account': google_account_details(request.user),
+        'google_integrations_enabled': settings.GOOGLE_INTEGRATIONS_ENABLED,
         'accent_palette': fellow.accent_palette if fellow else Fellow.AccentPalette.OCEAN,
     })
 
@@ -115,6 +117,8 @@ class GoogleConnectionAPIView(APIView):
     """Shared connection handling for all Google-backed endpoints."""
 
     def connection_response(self, user):
+        if not settings.GOOGLE_INTEGRATIONS_ENABLED:
+            return google_integrations_disabled_response()
         if has_google_connection(user):
             return None
         return Response({
@@ -132,6 +136,14 @@ class GoogleConnectionAPIView(APIView):
             'connected': True,
             'detail': str(exc),
         }, status=status.HTTP_502_BAD_GATEWAY)
+
+
+def google_integrations_disabled_response():
+    return Response({
+        'enabled': False,
+        'code': 'google_integrations_disabled',
+        'detail': 'Google Calendar, Drive and Tasks integrations are not enabled. Use UNbound tasks and manual availability.',
+    }, status=status.HTTP_403_FORBIDDEN)
 
 
 class GoogleAccountView(APIView):
@@ -595,6 +607,8 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='sync-google')
     def sync_google(self, request):
+        if not settings.GOOGLE_INTEGRATIONS_ENABLED:
+            return google_integrations_disabled_response()
         if not has_google_connection(request.user):
             return Response({
                 'connected': False,

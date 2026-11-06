@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261029-notice-dismiss-v2" />
 </head>
-<body data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}" data-accent="{{ accent_palette|default:'ocean' }}">
+<body data-google-integrations-enabled="{{ google_integrations_enabled|yesno:'true,false' }}" data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}" data-accent="{{ accent_palette|default:'ocean' }}">
   <aside class="sidebar" id="sidebar">
     <a class="sb-brand" href="/" title="Back to UNbound.org">
       <img src="{% static 'logo.png' %}" alt="UNbound" onerror="this.style.display='none'" />
@@ -23,9 +23,11 @@
       <button class="nav-item active" type="button" data-view="overview" onclick="showView('overview')">
         <i class="fa-solid fa-house"></i> Workspace
       </button>
+      {% if google_integrations_enabled %}
       <button class="nav-item" type="button" data-view="drive" onclick="showView('drive')">
         <i class="fa-brands fa-google-drive"></i> Google Drive
       </button>
+      {% endif %}
       <button class="nav-item" type="button" data-view="tasks" onclick="showView('tasks')">
         <i class="fa-solid fa-list-check"></i> Tasks
       </button>
@@ -195,6 +197,7 @@
               </div>
             </div>
 
+            {% if google_integrations_enabled %}
             <!-- Next Up Calendar Card -->
             <div class="card nextup-card">
               <div class="card-head-simple">
@@ -210,10 +213,12 @@
                 Open Meeting Hub
               </button>
             </div>
+            {% endif %}
           </div>
         </div>
       </section>
 
+      {% if google_integrations_enabled %}
       <!-- DUAL-SECTION GOOGLE DRIVE -->
       <section class="view" id="view-drive">
         <div class="page-head">
@@ -272,6 +277,7 @@
         </div>
       </section>
 
+      {% endif %}
       <!-- WORKSPACE TASKS -->
       <section class="view" id="view-tasks">
         <div class="page-head">
@@ -336,11 +342,13 @@
             <h1>Meeting Hub</h1>
             <div class="sub">Mark your availability — the group view updates as your team responds</div>
           </div>
+          {% if google_integrations_enabled %}
           <div class="meeting-top-actions">
             <button class="btn btn-primary" type="button" id="btnSyncGoogleCalendar">
               <i class="fa-brands fa-google"></i> Sync with Google Calendar
             </button>
           </div>
+          {% endif %}
         </div>
 
         <!-- Active When to Meet Request Banner & Selector -->
@@ -408,8 +416,10 @@
               <div>
                 <h3 id="myAvailabilityTitle">My Availability</h3>
                 <div class="meeting-col-sub">Click & drag to toggle — saved instantly</div>
+                {% if google_integrations_enabled %}
                 <div class="calendar-conflict-note"><span class="calendar-conflict-swatch"></span> Yellow outline means a Google Calendar conflict</div>
                 <div class="calendar-conflict-status" id="calendarConflictStatus" role="status" aria-live="polite"></div>
+                {% endif %}
               </div>
               <div class="meeting-col-actions">
                 <span class="w2m-save-toast" id="w2mSaveToast" style="display: none;"><i class="fa-solid fa-circle-check"></i> Saved</span>
@@ -451,6 +461,7 @@
           </div>
         </div>
 
+        {% if google_integrations_enabled %}
         <!-- Integrated Google Calendar Card Below Availability -->
         <div class="card meeting-calendar-card" style="margin-top: 24px;">
           <div class="meeting-col-header">
@@ -469,6 +480,7 @@
             <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading calendar events...</div>
           </div>
         </div>
+        {% endif %}
       </section>
 
       <!-- MILESTONES & ACHIEVEMENTS -->
@@ -531,6 +543,7 @@
     </section>
   </div>
 
+  {% if google_integrations_enabled %}
   <!-- FOLDER SELECTION MODAL -->
   <div class="modal-overlay" id="folderModal">
     <div class="modal-box">
@@ -565,6 +578,7 @@
     </div>
   </div>
 
+  {% endif %}
   <!-- SDG SELECTION MODAL -->
   <div class="modal-overlay" id="sdgModal">
     <div class="modal-box modal-lg">
@@ -593,6 +607,6 @@
   </div>
 
   <script src="{% static 'dashboard-utils.js' %}?v=20261029-notice-dismiss-v2"></script>
-  <script src="{% static 'dashboard.js' %}?v=20261029-notice-dismiss-v3"></script>
+  <script src="{% static 'dashboard.js' %}?v=20261106-identity-launch"></script>
 </body>
 </html>
