@@ -4,8 +4,11 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.db import transaction
 from django.db.models import F, Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render, redirect
-from django.views.decorators.http import require_POST
+from django.utils import timezone
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_POST, require_safe
 from allauth.socialaccount.models import SocialAccount
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -35,8 +38,9 @@ from .google_api import (
 )
 from .models import (
     MeetingAvailability, Task, Fellow, FellowBadge, InviteCode, SDG, Cohort, CohortDriveLink,
-    AvailabilityRequest, Phase, availability_task_visibility_filter,
+    AvailabilityRequest, ConfirmedMeeting, Phase, SharedDriveResource, availability_task_visibility_filter,
 )
+from .calendar_export import meeting_calendar
 from .forms import DrivePinForm
 from .serializers import MeetingAvailabilitySerializer, TaskSerializer, AvailabilityRequestSerializer
 from .badges_engine import evaluate_and_sync_badges
@@ -106,16 +110,41 @@ def dashboard_view(request, drive=False):
             return redirect('dashboard-drive')
 
     links = CohortDriveLink.objects.filter(cohort_id=fellow.cohort_id)
+    shared_resources = SharedDriveResource.objects.none()
+    if fellow.cohort_id:
+        shared_resources = SharedDriveResource.objects.filter(is_published=True).filter(
+            Q(audience=SharedDriveResource.Audience.ALL)
+            | Q(audience=SharedDriveResource.Audience.SELECTED, cohorts=fellow.cohort_id)
+        ).distinct()
     return render(request, 'fellow-dashboard.html', {
         'google_account': google_account_details(request.user),
         'google_integrations_enabled': settings.GOOGLE_INTEGRATIONS_ENABLED,
-        'drive_links': links.filter(pinned_by__isnull=True),
+        'drive_links': [*shared_resources, *links.filter(pinned_by__isnull=True)],
         'drive_pins': links.filter(pinned_by__isnull=False).order_by('-pk'),
         'drive_active': drive,
         'drive_pin_form': pin_form if fellow.cohort_id else None,
         'fellow_id': fellow.pk,
+        'confirmed_meetings': confirmed_meetings_for(fellow).filter(ends_at__gt=timezone.now()),
         'accent_palette': fellow.accent_palette,
     })
+
+
+def confirmed_meetings_for(fellow):
+    return ConfirmedMeeting.objects.filter(is_published=True, cohort_id=fellow.cohort_id)
+
+
+@login_required(login_url='account_login')
+@require_safe
+@never_cache
+def download_meeting(request, pk):
+    fellow = getattr(request.user, 'fellow_profile', None)
+    meetings = confirmed_meetings_for(fellow) if fellow else ConfirmedMeeting.objects.none()
+    meeting = get_object_or_404(meetings, pk=pk)
+    return HttpResponse(
+        meeting_calendar(meeting),
+        content_type='text/calendar; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="unbound-meeting-{meeting.pk}.ics"'},
+    )
 
 
 @login_required(login_url='account_login')
@@ -1003,9 +1032,12 @@ class DashboardOverviewAPIView(APIView):
         tasks_qs = tasks_qs.filter(
             availability_task_visibility_filter(fellow)
         )
-        open_tasks = tasks_qs.exclude(status=Task.Status.COMPLETE).count()
+        unfinished = tasks_qs.exclude(status=Task.Status.COMPLETE)
+        open_tasks = unfinished.count()
         completed_tasks = tasks_qs.filter(status=Task.Status.COMPLETE).count()
         total_tasks = tasks_qs.count()
+        today = timezone.localdate()
+        deadlines = unfinished.order_by('due_date', 'pk').values('title', 'due_date')
 
         completion_pct = round((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 0
 
@@ -1033,6 +1065,11 @@ class DashboardOverviewAPIView(APIView):
             'project_description': project_description,
             'chapter': chapter_str,
             'team_members': team_members,
+            'deadlines': {
+                'today': today,
+                'overdue': list(deadlines.filter(due_date__lt=today)[:3]),
+                'upcoming': list(deadlines.filter(due_date__gte=today)[:3]),
+            },
             'stats': {
                 'open_tasks': open_tasks,
                 'completed_tasks': completed_tasks,

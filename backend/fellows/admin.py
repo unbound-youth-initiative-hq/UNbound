@@ -13,8 +13,9 @@ from django.shortcuts import redirect, render
 from django.urls import path
 from django.utils import timezone
 
+from .forms import SharedDriveResourceForm
 from .models import (
-    Chapter, Cohort, CohortDriveLink, SDG, Fellow, Task, MeetingAvailability, Badge, FellowBadge,
+    Chapter, Cohort, CohortDriveLink, ConfirmedMeeting, SharedDriveResource, SDG, Fellow, Task, MeetingAvailability, Badge, FellowBadge,
     InviteCode, AvailabilityRequest, AvailabilitySubmission, Phase, ReminderBatch, ReminderDelivery, availability_task_visibility_filter,
 )
 
@@ -63,6 +64,23 @@ class CohortAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'phase']
     search_fields = ['name', 'project_name', 'project_description']
     filter_horizontal = ['selected_sdgs']
+
+
+@admin.register(SharedDriveResource)
+class SharedDriveResourceAdmin(admin.ModelAdmin):
+    form = SharedDriveResourceForm
+    list_display = ['title', 'audience', 'is_published']
+    list_filter = ['audience', 'is_published', 'cohorts']
+    filter_horizontal = ['cohorts']
+    search_fields = ['title']
+
+
+@admin.register(ConfirmedMeeting)
+class ConfirmedMeetingAdmin(admin.ModelAdmin):
+    list_display = ['title', 'cohort', 'starts_at', 'ends_at', 'is_published']
+    list_filter = ['cohort', 'is_published']
+    list_select_related = ['cohort']
+    search_fields = ['title']
 
 
 @admin.register(InviteCode)
