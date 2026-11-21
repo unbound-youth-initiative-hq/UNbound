@@ -1,3 +1,6 @@
+import re
+from urllib.parse import urlsplit
+
 from django.db import models
 from django.conf import settings
 from django.core.validators import RegexValidator
@@ -95,6 +98,7 @@ class Cohort(models.Model):
 
 class CohortDriveLink(models.Model):
     cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name='drive_links')
+    pinned_by = models.ForeignKey('Fellow', on_delete=models.CASCADE, null=True, blank=True, editable=False)
     title = models.CharField(max_length=150)
     url = models.URLField(
         'Google sharing link', max_length=2048,
@@ -111,6 +115,15 @@ class CohortDriveLink(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def kind(self):
+        path = urlsplit(self.url).path
+        if re.match(r'^/(?:drive/)?(?:u/\d+/)?folders/[\w-]+(?:/|$)', path):
+            return 'Folder'
+        if re.match(r'^/(?:file|document|spreadsheets|presentation|forms|drawings|vids)/(?:u/\d+/)?d/[\w-]+(?:/|$)', path):
+            return 'File'
+        return 'Link'
 
 
 class InviteCode(models.Model):

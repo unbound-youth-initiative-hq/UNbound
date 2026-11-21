@@ -46,8 +46,12 @@ class SDGAdmin(admin.ModelAdmin):
 
 class CohortDriveLinkInline(admin.TabularInline):
     model = CohortDriveLink
-    fields = ['title', 'url']
+    fields = ['title', 'url', 'pinned_by']
+    readonly_fields = ['pinned_by']
     extra = 0
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('pinned_by__user')
 
 
 @admin.register(Cohort)

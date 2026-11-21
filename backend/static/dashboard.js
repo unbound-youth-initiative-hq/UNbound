@@ -1636,5 +1636,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* Initial Load on Page Startup */
-  refreshWorkspace();
+  if (document.getElementById('view-drive')?.classList.contains('active')) {
+    window.showView('drive');
+  } else {
+    refreshWorkspace();
+  }
 });

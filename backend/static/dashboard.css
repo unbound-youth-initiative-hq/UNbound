@@ -330,7 +330,18 @@ img { display: block; max-width: 100%; }
 .btn-open-meetings { font-size: 13px; font-weight: 700; padding: 11px; }
 
 /* ---- GOOGLE DRIVE DUAL COLUMN & MODAL ---- */
-.drive-two-column-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+.drive-two-column-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.drive-connected-files { margin-top: 24px; }
+.drive-resource-list { padding: 0; list-style: none; }
+.drive-resource { gap: 12px; }
+.drive-resource .file-info { text-decoration: none; }
+.drive-resource .file-name { white-space: normal; overflow-wrap: anywhere; }
+.drive-resource .drive-open-icon { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
+.drive-pin-form { margin-top: 16px; }
+.drive-pin-form summary { cursor: pointer; color: var(--accent-dk); font-weight: 700; }
+.drive-pin-form .sub { margin: 10px 0 14px; }
+.drive-pin-form label { font-size: 13px; font-weight: 600; }
+.drive-pin-form .errorlist { margin: 0 0 14px; padding-left: 20px; color: var(--danger, #a52436); }
 .drive-column { display: flex; flex-direction: column; min-height: 520px; }
 .drive-col-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .drive-col-header h3 { font-size: 17px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 8px; }

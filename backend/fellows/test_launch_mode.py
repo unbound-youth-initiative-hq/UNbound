@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from rest_framework.test import APIClient
 
 from .google_api import GoogleIntegrationDisabled, get_google_credentials, has_google_connection
@@ -79,6 +80,55 @@ class IdentityOnlyLaunchTests(TestCase):
             with self.subTest(url=url), self.assertRaises(ValidationError):
                 link.url = url
                 link.full_clean()
+
+    def test_cohort_pin_shows_only_to_that_cohort_and_only_author_can_unpin(self):
+        drive_url = reverse('dashboard-drive')
+        coordinator_url = 'https://drive.google.com/drive/u/1/folders/resources'
+        self.cohort.drive_links.create(title='Resources', url=coordinator_url)
+        document = 'https://docs.google.com/document/d/example/edit?resourcekey=abc'
+        form = {'title': 'Working notes', 'url': document}
+        for _ in range(2):
+            self.assertRedirects(self.client.post(drive_url, form), drive_url)
+        pin = self.cohort.drive_links.get(pinned_by=self.fellow)
+        remove_url = reverse('remove-drive-pin', args=[pin.pk])
+        page = self.client.get(drive_url)
+        self.assertContains(page, 'class="view active" id="view-drive"')
+        self.assertContains(page, 'fa-folder file-folder')
+        self.assertContains(page, 'fa-file file-doc')
+        self.assertContains(page, 'Unpin Working notes')
+
+        teammate = get_user_model().objects.create_user('teammate')
+        teammate_profile = Fellow.objects.create(user=teammate, cohort=self.cohort)
+        self.client.force_login(teammate)
+        page = self.client.get(drive_url)
+        self.assertContains(page, document)
+        self.assertNotContains(page, remove_url)
+        self.assertEqual(self.client.post(remove_url).status_code, 404)
+
+        other = Cohort.objects.create(name='Other', start_date=self.cohort.start_date, end_date=self.cohort.end_date)
+        teammate_profile.cohort = other
+        teammate_profile.save(update_fields=['cohort'])
+        page = self.client.get(drive_url)
+        self.assertNotContains(page, coordinator_url)
+        self.assertNotContains(page, document)
+
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(remove_url).status_code, 405)
+        self.assertRedirects(self.client.post(remove_url), drive_url)
+        self.assertFalse(self.cohort.drive_links.filter(pk=pin.pk).exists())
+        self.assertNotContains(self.client.get(drive_url), document)
+
+    def test_pins_require_membership_and_a_google_sharing_link(self):
+        drive_url = reverse('dashboard-drive')
+        for url in ('https://example.org/document/d/test/', 'https://drive.google.com/', 'https://docs.google.com/redirect'):
+            with self.subTest(url=url):
+                page = self.client.post(drive_url, {'title': 'Invalid pin', 'url': url})
+                self.assertContains(page, 'class="drive-pin-form" open')
+                self.assertEqual(self.cohort.drive_links.count(), 0)
+        valid_url = 'https://drive.google.com/file/d/example/view'
+        self.fellow.cohort = None
+        self.fellow.save(update_fields=['cohort'])
+        self.assertEqual(self.client.post(drive_url, {'title': 'Example', 'url': valid_url}).status_code, 403)
 
     @override_settings(GOOGLE_INTEGRATIONS_ENABLED=True)
     def test_deferred_ui_remains_available_when_explicitly_enabled(self):
