@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
           // Highlight Active Phase Step
           renderPhases(data.phases, data.current_phase);
 
-          // Render Next Up Calendar Events
+          renderDeadlines(data.deadlines);
           loadNextUpEvents();
         }
       })
@@ -176,6 +176,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const message = document.getElementById('dashboardLoadStatus');
         if (message) message.textContent = error.message || 'Unable to load your workspace. Please refresh.';
       });
+  }
+
+  function renderDeadlines(deadlines) {
+    const list = document.getElementById('dashDeadlines');
+    if (!list || !deadlines) return;
+    const rows = [
+      ...deadlines.overdue.map(task => ({ ...task, label: 'Overdue', overdue: true })),
+      ...deadlines.upcoming.map(task => ({
+        ...task,
+        label: task.due_date === deadlines.today ? 'Due today' : 'Due',
+      })),
+    ];
+    list.innerHTML = rows.length ? rows.map(task => {
+      const date = task.label === 'Due today' ? '' : ' · ' + escapeHtml(formatShortDate(task.due_date));
+      return '<div class="nextup-item"><div class="nextup-info">' +
+        '<div class="nextup-title">' + escapeHtml(task.title) + '</div>' +
+        '<div class="nextup-meta' + (task.overdue ? ' deadline-overdue' : '') + '">' +
+        task.label + date + '</div></div></div>';
+    }).join('') + '<button class="btn btn-ghost btn-sm" type="button" onclick="showView(\'tasks\')">Open Tasks</button>'
+      : '<p class="empty-state">No upcoming or overdue task deadlines.</p>';
   }
 
   function renderSdgPills(sdgs) {

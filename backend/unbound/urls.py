@@ -34,6 +34,7 @@ urlpatterns = [
     path('dashboard/', views.dashboard_view, name='dashboard'),
     path('dashboard/drive/', views.dashboard_view, {'drive': True}, name='dashboard-drive'),
     path('dashboard/drive/pins/<int:pk>/remove/', views.remove_drive_pin, name='remove-drive-pin'),
+    path('dashboard/meetings/<int:pk>/calendar.ics', views.download_meeting, name='meeting-calendar'),
 
     path('api/dashboard/overview/', views.DashboardOverviewAPIView.as_view(), name='dashboard-overview-api'),
     path('api/dashboard/preferences/', views.DashboardPreferencesAPIView.as_view(), name='dashboard-preferences-api'),

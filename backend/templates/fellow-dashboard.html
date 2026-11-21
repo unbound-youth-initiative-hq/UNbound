@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261121-drive-pins" />
+  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261121-cohort-schedule" />
 </head>
 <body data-google-integrations-enabled="{{ google_integrations_enabled|yesno:'true,false' }}" data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}" data-accent="{{ accent_palette|default:'ocean' }}">
   <aside class="sidebar" id="sidebar">
@@ -195,14 +195,35 @@
               </div>
             </div>
 
-            {% if google_integrations_enabled %}
-            <!-- Next Up Calendar Card -->
             <div class="card nextup-card">
               <div class="card-head-simple">
-                <i class="fa-regular fa-calendar-days icon-cyan-text"></i>
+                <i class="fa-regular fa-calendar-days icon-cyan-text" aria-hidden="true"></i>
                 <h3>Next Up</h3>
               </div>
+              {% if confirmed_meetings %}
+                <div class="nextup-list">
+                  {% for meeting in confirmed_meetings|slice:":2" %}
+                    <div class="nextup-item">
+                      <div class="nextup-info">
+                        <div class="nextup-title">{{ meeting.title }}</div>
+                        <div class="nextup-meta">Meeting · <time datetime="{{ meeting.starts_at|date:'c' }}">{{ meeting.starts_at|date:'M j, g:i A T' }}</time></div>
+                      </div>
+                    </div>
+                  {% endfor %}
+                  <button class="btn btn-ghost btn-sm" type="button" onclick="showView('meetings')">Open Meeting Hub</button>
+                </div>
+              {% endif %}
+              <div class="nextup-list" id="dashDeadlines">
+                <p class="loading">Loading task deadlines…</p>
+              </div>
+            </div>
 
+            {% if google_integrations_enabled %}
+            <div class="card nextup-card">
+              <div class="card-head-simple">
+                <i class="fa-regular fa-calendar-days icon-cyan-text" aria-hidden="true"></i>
+                <h3>Google Calendar</h3>
+              </div>
               <div class="nextup-list" id="dashNextUpList">
                 <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading upcoming events...</div>
               </div>
@@ -377,7 +398,7 @@
           <div>
             <div class="eyebrow">SCHEDULING</div>
             <h1>Meeting Hub</h1>
-            <div class="sub">Mark your availability — the group view updates as your team responds</div>
+            <div class="sub">See confirmed meetings and respond to availability polls.</div>
           </div>
           {% if google_integrations_enabled %}
           <div class="meeting-top-actions">
@@ -387,6 +408,30 @@
           </div>
           {% endif %}
         </div>
+
+        <section class="card confirmed-meetings" aria-labelledby="confirmedMeetingsHeading">
+          <div class="card-head-simple"><h2 id="confirmedMeetingsHeading">Confirmed meetings</h2></div>
+          {% for meeting in confirmed_meetings %}
+            <article class="nextup-item confirmed-meeting">
+              <div class="nextup-info">
+                <h3 class="nextup-title">{{ meeting.title }}</h3>
+                <p class="nextup-meta">
+                  <time datetime="{{ meeting.starts_at|date:'c' }}">{{ meeting.starts_at|date:'D, M j, g:i A T' }}</time>
+                  to
+                  <time datetime="{{ meeting.ends_at|date:'c' }}">{{ meeting.ends_at|date:'D, M j, g:i A T' }}</time>
+                </p>
+              </div>
+              <div class="confirmed-meeting-actions">
+                {% if meeting.meet_url %}
+                  <a class="btn btn-primary btn-sm" href="{{ meeting.meet_url }}" target="_blank" rel="noopener noreferrer">Join on Google Meet</a>
+                {% endif %}
+                <a class="btn btn-ghost btn-sm" href="{% url 'meeting-calendar' meeting.pk %}">Download calendar event</a>
+              </div>
+            </article>
+          {% empty %}
+            <p class="empty-state">No confirmed meetings are scheduled for your cohort.</p>
+          {% endfor %}
+        </section>
 
         <!-- Active When to Meet Request Banner & Selector -->
         <div class="card w2m-request-card" id="w2mRequestBanner" style="display: none; margin-bottom: 20px;">
@@ -644,6 +689,6 @@
   </div>
 
   <script src="{% static 'dashboard-utils.js' %}?v=20261029-notice-dismiss-v2"></script>
-  <script src="{% static 'dashboard.js' %}?v=20261121-drive-pins"></script>
+  <script src="{% static 'dashboard.js' %}?v=20261121-cohort-schedule"></script>
 </body>
 </html>

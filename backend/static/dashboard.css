@@ -228,7 +228,7 @@ img { display: block; max-width: 100%; }
 .team-avatar-circle.more-circle { background: var(--accent); color: #ffffff; font-size: 12px; }
 
 .card-head-simple { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-.card-head-simple h3 { font-size: 17px; font-weight: 700; color: var(--ink); }
+.card-head-simple h2, .card-head-simple h3 { font-size: 17px; font-weight: 700; color: var(--ink); }
 .card-head-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
 .card-title-left { display: flex; align-items: center; gap: 10px; }
 .card-title-left h3 { font-size: 17px; font-weight: 700; color: var(--ink); }
@@ -326,6 +326,12 @@ img { display: block; max-width: 100%; }
 .nextup-info { flex: 1; min-width: 0; }
 .nextup-title { font-size: 13.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nextup-meta { font-size: 11.5px; color: var(--ink-dim); margin-top: 2px; }
+.deadline-overdue { color: #a52436; font-weight: 700; }
+.confirmed-meetings { margin-bottom: 24px; }
+.confirmed-meeting + .confirmed-meeting { margin-top: 10px; }
+.confirmed-meeting { flex-wrap: wrap; }
+.confirmed-meeting .nextup-title { white-space: normal; overflow-wrap: anywhere; }
+.confirmed-meeting-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .w-100 { width: 100%; }
 .btn-open-meetings { font-size: 13px; font-weight: 700; padding: 11px; }
 

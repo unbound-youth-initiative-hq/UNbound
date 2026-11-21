@@ -3,6 +3,7 @@ from urllib.parse import urlsplit
 
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils import timezone
 
@@ -96,9 +97,7 @@ class Cohort(models.Model):
         ordering = ['-start_date']
 
 
-class CohortDriveLink(models.Model):
-    cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name='drive_links')
-    pinned_by = models.ForeignKey('Fellow', on_delete=models.CASCADE, null=True, blank=True, editable=False)
+class DriveResource(models.Model):
     title = models.CharField(max_length=150)
     url = models.URLField(
         'Google sharing link', max_length=2048,
@@ -110,8 +109,8 @@ class CohortDriveLink(models.Model):
     )
 
     class Meta:
+        abstract = True
         ordering = ['title', 'pk']
-        verbose_name = 'Google Drive link'
 
     def __str__(self):
         return self.title
@@ -124,6 +123,59 @@ class CohortDriveLink(models.Model):
         if re.match(r'^/(?:file|document|spreadsheets|presentation|forms|drawings|vids)/(?:u/\d+/)?d/[\w-]+(?:/|$)', path):
             return 'File'
         return 'Link'
+
+
+class CohortDriveLink(DriveResource):
+    cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name='drive_links')
+    pinned_by = models.ForeignKey('Fellow', on_delete=models.CASCADE, null=True, blank=True, editable=False)
+
+    class Meta(DriveResource.Meta):
+        verbose_name = 'Google Drive link'
+
+
+class SharedDriveResource(DriveResource):
+    class Audience(models.TextChoices):
+        SELECTED = 'selected', 'Selected cohorts'
+        ALL = 'all', 'All cohorts'
+
+    audience = models.CharField(max_length=8, choices=Audience.choices, default=Audience.SELECTED)
+    cohorts = models.ManyToManyField(
+        Cohort, blank=True, related_name='shared_drive_resources',
+        help_text='Choose at least one cohort when the audience is Selected cohorts.',
+    )
+    is_published = models.BooleanField(default=True)
+
+    class Meta(DriveResource.Meta):
+        verbose_name = 'Shared Drive resource'
+
+
+class ConfirmedMeeting(models.Model):
+    cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name='confirmed_meetings')
+    title = models.CharField(max_length=200)
+    starts_at = models.DateTimeField(help_text='Enter the start in Monterrey time.')
+    ends_at = models.DateTimeField(help_text='Enter the end in Monterrey time.')
+    meet_url = models.URLField(
+        'Google Meet link', blank=True, max_length=512,
+        validators=[RegexValidator(
+            r'\Ahttps://meet\.google\.com/(?:[a-z]{3}-[a-z]{4}-[a-z]{3}|lookup/[\w-]+)/?(?:\?[^#\s]*)?\Z',
+            'Enter a Google Meet call link.',
+        )],
+    )
+    is_published = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['starts_at', 'pk']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(ends_at__gt=models.F('starts_at')), name='meeting_ends_after_start'),
+        ]
+
+    def clean(self):
+        if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
+            raise ValidationError({'ends_at': 'The meeting must end after it starts.'})
+
+    def __str__(self):
+        return self.title
 
 
 class InviteCode(models.Model):
