@@ -332,6 +332,12 @@
       font-family: var(--display); font-weight: 600; font-size: clamp(40px, 4vw, 58px);
       line-height: 1; letter-spacing: -0.02em; color: var(--accent);
     }
+    .mstat-suffix { display: inline-block; animation: mstatPop .45s cubic-bezier(.34,1.56,.64,1) both; }
+    @keyframes mstatPop {
+      from { opacity: 0; transform: scale(0.3) translateY(20%); }
+      to   { opacity: 1; transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { .mstat-suffix { animation: none; } }
     .mstat-l {
       font-family: var(--mono); font-size: 13px; letter-spacing: 0.12em;
       text-transform: uppercase; color: var(--ink-dim); font-weight: 500; line-height: 1.5; max-width: 16ch;
@@ -1556,14 +1562,21 @@
       missionNums.forEach(el => {
         const target = parseInt(el.getAttribute('data-count'), 10);
         const suffix = el.getAttribute('data-suffix') || '';
-        const fmt = n => n.toLocaleString('en-US') + suffix;
+        const fmt = n => n.toLocaleString('en-US');
         const dur = 3000, t0 = performance.now();
         function tick(now) {
           if (!missionRunning) return;
           const p = Math.min((now - t0) / dur, 1);
           const eased = 1 - Math.pow(1 - p, 3);
           el.textContent = fmt(Math.round(eased * target));
-          if (p < 1) requestAnimationFrame(tick); else el.textContent = fmt(target);
+          if (p < 1) { requestAnimationFrame(tick); return; }
+          el.textContent = fmt(target);
+          if (suffix) {
+            const s = document.createElement('span');
+            s.className = 'mstat-suffix';
+            s.textContent = suffix;
+            el.appendChild(s);
+          }
         }
         requestAnimationFrame(tick);
       });
