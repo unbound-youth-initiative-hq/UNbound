@@ -5,7 +5,7 @@ The launch build defaults to `GOOGLE_INTEGRATIONS_ENABLED=false`. It requests on
 ## What is available
 
 - Invitation enrollment and returning Google sign-in using personal Google accounts.
-- Coordinator-published links to Google Drive resources for each cohort. Apply migration `0013_cohort_drive_links` and run `python manage.py setup_staff_group` before deploying the updated dashboard.
+- Coordinator resources and fellow-pinned Google Drive links for each cohort. Run `python manage.py migrate --noinput` through `0014_cohort_drive_pins` and `python manage.py setup_staff_group` before deploying the updated dashboard.
 - Staff administration, cohorts, phase catalog, individual and shared-team assignments.
 - Manual When2Meet selection, submission and group availability, including linked assignment completion.
 - Badges, SDGs, dashboard progress and personalization.

@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261029-notice-dismiss-v2" />
+  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261121-drive-pins" />
 </head>
 <body data-google-integrations-enabled="{{ google_integrations_enabled|yesno:'true,false' }}" data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}" data-accent="{{ accent_palette|default:'ocean' }}">
   <aside class="sidebar" id="sidebar">
@@ -20,10 +20,10 @@
       <span class="wm">UNbound</span>
     </a>
     <nav class="sb-nav" id="sbNav" aria-label="Dashboard">
-      <button class="nav-item active" type="button" data-view="overview" onclick="showView('overview')">
+      <button class="nav-item{% if not drive_active %} active{% endif %}" type="button" data-view="overview" onclick="showView('overview')">
         <i class="fa-solid fa-house"></i> Workspace
       </button>
-      <button class="nav-item" type="button" data-view="drive" onclick="showView('drive')">
+      <button class="nav-item{% if drive_active %} active{% endif %}" type="button" data-view="drive" onclick="showView('drive')">
         <i class="fa-brands fa-google-drive"></i> Google Drive
       </button>
       <button class="nav-item" type="button" data-view="tasks" onclick="showView('tasks')">
@@ -75,7 +75,7 @@
         </div>
       {% endfor %}
       <!-- OVERVIEW / DASHBOARD -->
-      <section class="view active" id="view-overview">
+      <section class="view{% if not drive_active %} active{% endif %}" id="view-overview">
         <!-- Hero Welcome Header -->
         <div class="dash-welcome-row">
           <div>
@@ -216,31 +216,58 @@
         </div>
       </section>
 
-      <section class="view" id="view-drive">
+      <section class="view{% if drive_active %} active{% endif %}" id="view-drive">
         <div class="page-head">
           <div>
             <h1>Google Drive</h1>
-            <p class="sub">Open shared resources with the Google account your coordinator invited.</p>
+            <p class="sub">Use a Google account with access to open a file or folder.</p>
           </div>
           <a class="btn btn-ghost" href="https://drive.google.com/" target="_blank" rel="noopener noreferrer">Open my Drive <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
         </div>
 
-        <div class="card">
-          <div class="card-head-simple"><h3>Cohort files and folders</h3></div>
-          <div class="file-list-container">
-            {% for link in drive_links %}
-              <a class="file-item file-name" href="{{ link.url }}" target="_blank" rel="noopener noreferrer">
-                <span class="file-info"><i class="fa-brands fa-google-drive" aria-hidden="true"></i><span class="file-name">{{ link.title }}</span></span>
-                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-              </a>
-            {% empty %}
+        <div class="drive-two-column-layout">
+          <section class="card">
+            <div class="card-head-simple"><h2>Coordinator resources</h2></div>
+            {% if drive_links %}
+              <ul class="file-list-container drive-resource-list">
+                {% for link in drive_links %}{% include 'drive-link.html' %}{% endfor %}
+              </ul>
+            {% else %}
               <p class="empty-state">Your coordinator hasn’t posted any links for your cohort yet.</p>
-            {% endfor %}
-          </div>
+            {% endif %}
+          </section>
+
+          <section class="card">
+            <div class="card-head-simple"><h2>Cohort pins</h2></div>
+            {% if drive_pin_form %}
+              {% if drive_pins %}
+                <ul class="file-list-container drive-resource-list">
+                  {% for link in drive_pins %}{% include 'drive-link.html' %}{% endfor %}
+                </ul>
+              {% else %}
+                <p class="empty-state">Your cohort hasn’t pinned any files or folders yet.</p>
+              {% endif %}
+              <details class="drive-pin-form"{% if drive_pin_form.errors %} open{% endif %}>
+                <summary>Pin a file or folder</summary>
+                <p class="sub">Share it with your cohort in Google Drive first. Everyone in your cohort can see the title and link you pin here.</p>
+                <form method="post" action="{% url 'dashboard-drive' %}">
+                  {% csrf_token %}
+                  {% for field in drive_pin_form %}
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {{ field.errors }}
+                  {% endfor %}
+                  <button class="btn btn-primary" type="submit"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i> Pin to cohort</button>
+                </form>
+              </details>
+            {% else %}
+              <p class="empty-state">You can pin links once you’re assigned to a cohort.</p>
+            {% endif %}
+          </section>
         </div>
 
         {% if google_integrations_enabled %}
-        <div class="drive-two-column-layout">
+        <div class="drive-two-column-layout drive-connected-files">
           <!-- Column 1: Personal Files -->
           <div class="card drive-column">
             <div class="drive-col-header">
@@ -617,6 +644,6 @@
   </div>
 
   <script src="{% static 'dashboard-utils.js' %}?v=20261029-notice-dismiss-v2"></script>
-  <script src="{% static 'dashboard.js' %}?v=20261121-cohort-drive"></script>
+  <script src="{% static 'dashboard.js' %}?v=20261121-drive-pins"></script>
 </body>
 </html>

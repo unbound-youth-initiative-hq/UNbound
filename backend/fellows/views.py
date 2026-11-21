@@ -1,8 +1,11 @@
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.db import transaction
-from django.db.models import Q
-from django.shortcuts import render, redirect
+from django.db.models import F, Q
+from django.shortcuts import get_object_or_404, render, redirect
+from django.views.decorators.http import require_POST
 from allauth.socialaccount.models import SocialAccount
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -34,6 +37,7 @@ from .models import (
     MeetingAvailability, Task, Fellow, FellowBadge, InviteCode, SDG, Cohort, CohortDriveLink,
     AvailabilityRequest, Phase, availability_task_visibility_filter,
 )
+from .forms import DrivePinForm
 from .serializers import MeetingAvailabilitySerializer, TaskSerializer, AvailabilityRequestSerializer
 from .badges_engine import evaluate_and_sync_badges
 
@@ -77,17 +81,52 @@ def google_account_details(user):
 
 
 @login_required(login_url='account_login')
-def dashboard_view(request):
-    """Render the dashboard shell; each Google mini-app loads live data via API."""
+def dashboard_view(request, drive=False):
     fellow = getattr(request.user, 'fellow_profile', None)
     if fellow is None:
         return redirect('register_code')
+    pin_form = DrivePinForm()
+    if drive and request.method == 'POST':
+        if fellow.cohort_id is None:
+            raise DjangoPermissionDenied
+        pin_form = DrivePinForm(request.POST)
+        if pin_form.is_valid():
+            with transaction.atomic():
+                # Serialize retries from this fellow and check their current cohort.
+                member = Fellow.objects.select_for_update().get(pk=fellow.pk)
+                if member.cohort_id != fellow.cohort_id:
+                    raise DjangoPermissionDenied
+                _, created = CohortDriveLink.objects.get_or_create(
+                    cohort_id=member.cohort_id,
+                    pinned_by=member,
+                    url=pin_form.cleaned_data['url'],
+                    defaults={'title': pin_form.cleaned_data['title']},
+                )
+            messages.success(request, 'Pinned to your cohort.' if created else 'You’ve already pinned this link.')
+            return redirect('dashboard-drive')
+
+    links = CohortDriveLink.objects.filter(cohort_id=fellow.cohort_id)
     return render(request, 'fellow-dashboard.html', {
         'google_account': google_account_details(request.user),
         'google_integrations_enabled': settings.GOOGLE_INTEGRATIONS_ENABLED,
-        'drive_links': CohortDriveLink.objects.filter(cohort_id=fellow.cohort_id),
-        'accent_palette': fellow.accent_palette if fellow else Fellow.AccentPalette.OCEAN,
+        'drive_links': links.filter(pinned_by__isnull=True),
+        'drive_pins': links.filter(pinned_by__isnull=False).order_by('-pk'),
+        'drive_active': drive,
+        'drive_pin_form': pin_form if fellow.cohort_id else None,
+        'fellow_id': fellow.pk,
+        'accent_palette': fellow.accent_palette,
     })
+
+
+@login_required(login_url='account_login')
+@require_POST
+def remove_drive_pin(request, pk):
+    pin = get_object_or_404(
+        CohortDriveLink, pk=pk, pinned_by__user=request.user, cohort_id=F('pinned_by__cohort_id'),
+    )
+    pin.delete()
+    messages.success(request, 'Link unpinned.')
+    return redirect('dashboard-drive')
 
 
 def register_code_view(request):
