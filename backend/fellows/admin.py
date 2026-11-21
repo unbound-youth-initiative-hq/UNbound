@@ -1,5 +1,11 @@
+from base64 import b64encode
 from datetime import date
 from uuid import UUID
+from urllib.parse import quote, urlencode
+
+from allauth.socialaccount.models import SocialAccount
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from smtplib import SMTPException
 
 from django import forms
@@ -12,8 +18,9 @@ from django.http import HttpResponseForbidden, HttpResponseNotAllowed
 from django.shortcuts import redirect, render
 from django.urls import path
 from django.utils import timezone
+from django.utils.html import format_html
 
-from .forms import SharedDriveResourceForm
+from .forms import BadgeAdminForm, SharedDriveResourceForm
 from .models import (
     Chapter, Cohort, CohortDriveLink, ConfirmedMeeting, SharedDriveResource, SDG, Fellow, Task, MeetingAvailability, Badge, FellowBadge,
     InviteCode, AvailabilityRequest, AvailabilitySubmission, Phase, ReminderBatch, ReminderDelivery, availability_task_visibility_filter,
@@ -212,13 +219,13 @@ def pending_tasks_email(fellow, tasks):
         f"Hi {first_name},",
         "",
         f"You have {len(tasks)} assignment(s) that are not complete yet.",
-        "Tasks assigned by UNbound appear first. When2meet requests are first within that group.",
+        "Tasks assigned by UNbound appear first. WhenBound requests are first within that group.",
         "",
     ]
     for task in tasks:
         labels = [task.get_source_display()]
         if task.availability_request_id:
-            labels.insert(0, "WHEN2MEET")
+            labels.insert(0, "WhenBound")
         labels.append("Team" if task.scope == Task.Scope.TEAM else "Individual")
         due = f" — due {task.due_date.strftime('%b %d, %Y')}" if task.due_date else ""
         if task.due_time:
@@ -237,6 +244,7 @@ class FellowAdmin(admin.ModelAdmin):
     list_filter = ['role', 'chapter', 'cohort']
     search_fields = ['user__first_name', 'user__last_name', 'user__email']
     inlines = [FellowBadgeInline]
+    actions = ['email_selected_fellows']
     autocomplete_fields = ['user', 'chapter', 'cohort']
     list_select_related = ['user', 'chapter', 'cohort__phase']
     readonly_fields = ['xp_points', 'get_current_phase']
@@ -245,6 +253,33 @@ class FellowAdmin(admin.ModelAdmin):
         ('Progress', {'fields': ('get_current_phase', 'xp_points')}),
         ('Preferences', {'fields': ('accent_palette', 'meeting_timezone'), 'classes': ('collapse',)}),
     ]
+
+    @admin.action(permissions=['change'], description='Email selected fellows (BCC draft)')
+    def email_selected_fellows(self, request, queryset):
+        selected = queryset.filter(role=Fellow.Role.FELLOW, user__is_active=True)
+        accounts = SocialAccount.objects.filter(
+            provider='google', user__fellow_profile__in=selected,
+        ).order_by('pk').values_list('user_id', 'extra_data')
+        addresses = {}
+        for user_id, data in accounts:
+            address = data.get('email')
+            if not isinstance(address, str) or not (
+                data.get('email_verified') is True or data.get('verified_email') is True
+            ):
+                continue
+            try:
+                validate_email(address)
+            except ValidationError:
+                continue
+            addresses.setdefault(user_id, address)
+        recipients = sorted(set(addresses.values()), key=str.casefold)
+        bcc = ','.join(recipients)
+        return render(request, 'admin/fellows/fellow/email_selected.html', {
+            **self.admin_site.each_context(request), 'opts': self.model._meta,
+            'title': 'Email selected fellows', 'recipients': recipients,
+            'skipped': queryset.count() - len(addresses), 'bcc': bcc,
+            'draft_url': 'mailto:?' + urlencode({'bcc': bcc}, quote_via=quote),
+        })
 
     @admin.display(description='Current Phase')
     def get_current_phase(self, obj):
@@ -388,10 +423,28 @@ class TaskAdmin(admin.ModelAdmin):
 
 @admin.register(Badge)
 class BadgeAdmin(admin.ModelAdmin):
+    form = BadgeAdminForm
+    readonly_fields = ['current_artwork']
+
+    class Media:
+        css = {'all': ('badge-art.css',)}
+
+    @admin.display(description='Current artwork')
+    def current_artwork(self, badge):
+        if not badge:
+            return 'Choose artwork or upload an image.'
+        if badge.icon_png:
+            return format_html('<img width="48" alt="Uploaded badge icon" src="data:image/png;base64,{}">',
+                               b64encode(badge.icon_png).decode('ascii'))
+        if badge.artwork:
+            return format_html('<span class="admin-badge-preview"><span class="badge-art badge-art-{}" '
+                               'aria-hidden="true"></span></span> {}', badge.artwork, badge.get_artwork_display())
+        return badge.icon_class
+
     prepopulated_fields = {'slug': ('name',)}
     list_display = ['name', 'trigger_type', 'required_task_count', 'required_phase', 'xp_reward', 'color', 'order']
     ordering = ['order']
-    fieldsets = [('Badge', {'fields': ('name', 'slug', 'description', 'icon_class', 'color', 'order')}), ('How it is earned', {'fields': ('trigger_type', 'required_task_count', 'required_phase', 'xp_reward')})]
+    fieldsets = [('Badge', {'fields': ('name', 'slug', 'description', 'current_artwork', 'artwork', 'custom_icon', 'remove_custom_icon', 'icon_class', 'color', 'order')}), ('How it is earned', {'fields': ('trigger_type', 'required_task_count', 'required_phase', 'xp_reward')})]
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == 'required_phase':
@@ -411,7 +464,7 @@ class AvailabilityRequestAdmin(admin.ModelAdmin):
         }),
         ('Date & Time Window', {
             'fields': (('start_date', 'end_date'), ('start_hour', 'end_hour'), 'deadline'),
-            'description': 'Changing the dates or hours clears previous responses and asks fellows to submit again. Hours use the 24-hour clock.'
+            'description': 'Changing the dates or hours clears previous responses and asks fellows to submit again. Enter hours in Monterrey time using the 24-hour clock. Fellows see slots in their selected time zone.'
         }),
         ('Assignment Target', {
             'fields': ('cohort', 'assign_to_all'),

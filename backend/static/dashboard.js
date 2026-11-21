@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     notice.addEventListener('focusout', schedule);
     schedule();
   });
-  const { escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime } = window.UNboundUI;
+  const { escapeHtml, safeUrl, safeColor, safeIcon, taskIconForeground, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime } = window.UNboundUI;
 
   /* The portal's CSRF secret belongs to its session, independently of Admin. */
   const csrftoken = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -618,6 +618,20 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  function taskAppearanceFields(form) {
+    const { icon, color } = form.elements;
+    const preview = form.querySelector('.task-appearance-preview');
+    const update = () => {
+      preview.style.backgroundColor = color.value;
+      preview.style.color = taskIconForeground(color.value);
+      preview.firstElementChild.className = 'fa-solid ' + safeIcon(icon.value);
+    };
+    icon.addEventListener('change', update);
+    color.addEventListener('input', update);
+    update();
+    return { update, values: () => ({ icon: icon.value, color: color.value }) };
+  }
+
   function saveTask(url, method, data) {
     return fetch(url, {
       method,
@@ -628,6 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('[data-task-scope]').forEach(form => {
     const deadline = taskDeadlineFields(form);
+    const appearance = taskAppearanceFields(form);
     const feedback = form.querySelector('.form-feedback');
     const submit = form.querySelector('[type="submit"]');
     form.addEventListener('submit', async event => {
@@ -637,8 +652,9 @@ document.addEventListener('DOMContentLoaded', () => {
       feedback.textContent = '';
       submit.disabled = true;
       try {
-        await saveTask('/api/tasks/', 'POST', { title, scope: form.dataset.taskScope, ...deadline.values() });
+        await saveTask('/api/tasks/', 'POST', { title, scope: form.dataset.taskScope, ...deadline.values(), ...appearance.values() });
         form.reset();
+        appearance.update();
         deadline.set(null, null);
         form.querySelector('details').open = false;
         loadTasks();
@@ -654,6 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (deadlineDialog) {
     const form = document.getElementById('taskDeadlineForm');
     const deadline = taskDeadlineFields(form);
+    const appearance = taskAppearanceFields(form);
     const feedback = form.querySelector('.form-feedback');
     const submit = form.querySelector('[type="submit"]');
     const cancel = form.querySelector('[type="button"]');
@@ -664,6 +681,16 @@ document.addEventListener('DOMContentLoaded', () => {
       form.dataset.taskId = button.dataset.taskDeadlineId;
       document.getElementById('taskDeadlineTitle').textContent = button.dataset.taskTitle;
       deadline.set(button.dataset.dueDate, button.dataset.dueTime);
+      const icon = form.elements.icon;
+      icon.querySelector('[data-legacy]')?.remove();
+      if (![...icon.options].some(option => option.value === button.dataset.icon)) {
+        const option = new Option('Current icon', button.dataset.icon);
+        option.dataset.legacy = 'true';
+        icon.add(option);
+      }
+      icon.value = button.dataset.icon;
+      form.elements.color.value = button.dataset.color;
+      appearance.update();
       feedback.textContent = '';
       deadlineDialog.showModal();
     });
@@ -679,7 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
       feedback.textContent = '';
       submit.disabled = cancel.disabled = true;
       try {
-        await saveTask(`/api/tasks/${id}/`, 'PATCH', deadline.values());
+        await saveTask(`/api/tasks/${id}/`, 'PATCH', { ...deadline.values(), ...appearance.values() });
         deadlineDialog.close();
         loadTasks();
       } catch (error) {
@@ -976,7 +1003,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  /* ---------- Meeting Hub Controller (When to Meet) ---------- */
+  /* ---------- Meeting Hub Controller (WhenBound) ---------- */
   let activeMeetingRequests = [];
   let currentRequestId = null;
   let currentRequestData = null;
@@ -992,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let availabilityEditVersion = 0;
   let availabilityLoadedFor = null;
 
-  window.openWhenToMeet = function (requestId = null) {
+  window.openWhenBound = function (requestId = null) {
     showView('meetings');
     loadMeetingHub(requestId);
   };
@@ -1087,14 +1114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const req = currentRequestData;
     currentStartHour = Number(req.start_hour);
     currentEndHour = Number(req.end_hour);
-    currentDates = [];
-    const start = new Date(`${req.start_date}T12:00:00`);
-    const end = new Date(`${req.end_date}T12:00:00`);
-    for (let day = new Date(start); day <= end && currentDates.length < 42; day.setDate(day.getDate() + 1)) {
-      currentDates.push({ date: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`,
-        dayName: day.toLocaleDateString('en-US', { weekday: 'short' }), monthName: day.toLocaleDateString('en-US', { month: 'short' }),
-        dayNum: day.getDate(), dayOfWeek: day.getDay(), isToday: day.toDateString() === new Date().toDateString() });
-    }
+    currentDates = req.display_days;
 
     const titleEl = document.getElementById('w2mRequestTitle');
     const descEl = document.getElementById('w2mRequestDesc');
@@ -1104,7 +1124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('w2mStatusPill');
     const targetCohort = document.getElementById('w2mTargetCohort');
 
-    if (titleEl) titleEl.textContent = req.title || 'When to Meet Request';
+    if (titleEl) titleEl.textContent = req.title || 'WhenBound Request';
     if (descEl) descEl.textContent = req.description || 'Mark your availability below to coordinate our next team milestone.';
     if (rangeEl) rangeEl.textContent = `${formatShortDate(req.start_date)} – ${formatShortDate(req.end_date)}`;
 
@@ -1194,17 +1214,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderAvailabilityWeeks(dates, startHour, endHour, renderCell) {
     const weeks = [];
-    for (let index = 0; index < dates.length; index += 7) {
-      weeks.push(dates.slice(index, index + 7));
+    for (const date of dates) {
+      const lastWeek = weeks.at(-1);
+      // A daylight-saving transition can change the row labels midweek.
+      if (!lastWeek || lastWeek.length === 7 || date.hours?.join() !== lastWeek[0].hours?.join()) {
+        weeks.push([date]);
+      } else {
+        lastWeek.push(date);
+      }
     }
 
-    return weeks.map((week, weekIndex) => {
+    return weeks.map((week) => {
       const first = week[0];
       const last = week[week.length - 1];
       let html = `
         <div class="availability-week-block">
           <div class="availability-week-heading">${escapeHtml(first.monthName)} ${escapeHtml(first.dayNum)} – ${escapeHtml(last.monthName)} ${escapeHtml(last.dayNum)}</div>
-          <div class="availability-grid-container" style="grid-template-columns: 52px repeat(${week.length}, minmax(42px, 1fr));">
+          <div class="availability-grid-container" style="grid-template-columns: 76px repeat(${week.length}, minmax(42px, 1fr));">
             <div class="grid-header-cell"></div>
       `;
 
@@ -1218,8 +1244,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       for (let hour = startHour; hour < endHour; hour++) {
-        const hourLabel = hour > 12 ? `${hour - 12} PM` : (hour === 12 ? '12 PM' : `${hour || 12} AM`);
-        html += `<div class="grid-time-label">${hourLabel}</div>`;
+        const hourLabel = first.hours?.[hour - startHour] || String(hour);
+        html += `<div class="grid-time-label">${escapeHtml(hourLabel)}</div>`;
         week.forEach(date => { html += renderCell(date, hour); });
       }
 
@@ -1331,7 +1357,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const validDates = dates.filter(date => date.date);
     const key = makeAvailabilityConflictKey(validDates);
     if (!key) return;
-    const timeZone = getAvailabilityTimezone();
+    const timeZone = 'America/Monterrey';
     const statusEl = document.getElementById('calendarConflictStatus');
 
     if (availabilityConflictCache.key === key) {
@@ -1479,9 +1505,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         if (requestedId !== currentRequestId) return;
         if (data.status === 'success') {
-          if (data.dates && data.dates.length > 0) {
-            currentDates = data.dates;
-          }
           if (data.start_hour !== undefined) currentStartHour = data.start_hour;
           if (data.end_hour !== undefined) currentEndHour = data.end_hour;
 
@@ -1673,12 +1696,18 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           gridEl.innerHTML = data.badges.map(b => {
+            let iconMarkup = `<i class="fa-solid ${safeIcon(b.icon_class)}"></i>`;
+            if (b.has_custom_icon && recordId(b.id)) {
+              iconMarkup = `<img src="/dashboard/badges/${b.id}/icon.png" alt="">`;
+            } else if (/^[a-z-]+$/.test(b.artwork || '')) {
+              iconMarkup = `<span class="badge-art badge-art-${b.artwork}" aria-hidden="true"></span>`;
+            }
             if (b.earned) {
               return `
                 <div class="badge-card earned">
                   <div class="badge-icon-rail">
                     <div class="badge-icon-circle" style="background-color: ${safeColor(b.color)};">
-                      <i class="fa-solid ${safeIcon(b.icon_class)}"></i>
+                      ${iconMarkup}
                     </div>
                   </div>
                   <div class="badge-copy">
@@ -1693,7 +1722,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="badge-card unearned">
                   <div class="badge-icon-rail">
                     <div class="badge-icon-circle">
-                      <i class="fa-solid ${safeIcon(b.icon_class)}"></i>
+                      ${iconMarkup}
                     </div>
                   </div>
                   <div class="badge-copy">
@@ -1715,7 +1744,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="badge-card unearned">
                   <div class="badge-icon-rail">
                     <div class="badge-icon-circle">
-                      <i class="fa-solid ${safeIcon(b.icon_class)}"></i>
+                      ${iconMarkup}
                     </div>
                   </div>
                   <div class="badge-copy">

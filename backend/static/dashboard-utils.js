@@ -23,6 +23,16 @@
     return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(String(value)) ? value : fallback;
   }
 
+  function taskIconForeground(color) {
+    const rgb = safeColor(color).slice(1);
+    const hex = rgb.length === 3 ? [...rgb].map(c => c + c).join('') : rgb;
+    const [r, g, b] = hex.match(/../g).map(pair => {
+      const value = parseInt(pair, 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? '#000000' : '#ffffff';
+  }
+
   function safeIcon(value, fallback = 'fa-award') {
     return /^fa-[a-z0-9-]+$/.test(String(value)) ? value : fallback;
   }
@@ -65,14 +75,14 @@
       const color = safeColor(task.color, team ? '#00B4D8' : '#e0a009');
       const icon = safeIcon(task.icon, team ? 'fa-pen-to-square' : 'fa-check');
       return `<div class="proto-task-card ${status === 'complete' ? 'completed' : ''}">
-        <div class="proto-task-icon-box" style="background-color: ${color};"><i class="fa-solid ${icon}"></i></div>
+        <div class="proto-task-icon-box" style="background-color: ${color}; color: ${taskIconForeground(color)};"><i class="fa-solid ${icon}"></i></div>
         <div class="proto-task-content">
           ${task.source === 'unbound' ? '<div class="source-badge"><i class="fa-solid fa-globe"></i> ASSIGNED BY UNBOUND</div>' : ''}
           <div class="proto-task-title">${escapeHtml(task.title)}</div>
           ${task.description ? `<div class="proto-task-desc">${escapeHtml(task.description)}</div>` : ''}
           ${task.due_date ? `<div class="proto-task-desc">Due ${escapeHtml(task.due_date)}${task.due_time ? ` · ${formatTaskTime(task.due_time)}` : ''}</div>` : ''}
-          ${task.can_edit === true ? `<button class="btn btn-ghost btn-sm task-deadline-edit" type="button" data-task-deadline-id="${id}" data-task-title="${escapeHtml(task.title)}" data-due-date="${escapeHtml(task.due_date || '')}" data-due-time="${escapeHtml(task.due_time || '')}">Edit deadline</button>` : ''}
-          ${requestId ? `<button class="btn btn-ghost btn-open-w2m-task" type="button" onclick="openWhenToMeet(${requestId})"><i class="fa-solid fa-calendar-check"></i> Open When to Meet</button>` : ''}
+          ${task.can_edit === true ? `<button class="btn btn-ghost btn-sm task-deadline-edit" type="button" data-task-deadline-id="${id}" data-task-title="${escapeHtml(task.title)}" data-icon="${icon}" data-color="${color}" data-due-date="${escapeHtml(task.due_date || '')}" data-due-time="${escapeHtml(task.due_time || '')}">Edit task details</button>` : ''}
+          ${requestId ? `<button class="btn btn-ghost btn-open-w2m-task" type="button" onclick="openWhenBound(${requestId})"><i class="fa-solid fa-calendar-check"></i> Open WhenBound</button>` : ''}
         </div>
         <div class="proto-task-actions">
           ${requestId || task.can_change_status === false ? `<span class="status-select-pill ${status}">${label}</span>` : `<select class="status-select-pill ${status}" aria-label="Status for ${escapeHtml(task.title)}" onchange="updateTaskStatus(${id}, this.value)">
@@ -102,5 +112,5 @@
     return `${hour % 12 || 12}:${time[2]} ${hour < 12 ? 'AM' : 'PM'} Monterrey time`;
   }
 
-  return { escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime };
+  return { taskIconForeground, escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime };
 }));

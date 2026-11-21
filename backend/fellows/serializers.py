@@ -2,6 +2,8 @@ import re
 
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
+from .artwork import TASK_ICONS
+from .meeting_timezones import localized_poll_days
 from .models import Task, MeetingAvailability, AvailabilityRequest
 
 
@@ -35,7 +37,7 @@ class TaskSerializer(serializers.ModelSerializer):
         return not bool(obj.availability_request_id)
 
     def validate_icon(self, value):
-        if value and not re.fullmatch(r'fa-[a-z0-9-]+', value):
+        if value and value not in dict(TASK_ICONS) and value != getattr(self.instance, 'icon', None):
             raise serializers.ValidationError('Choose a valid icon name.')
         return value
 
@@ -95,6 +97,7 @@ class MeetingAvailabilitySerializer(serializers.ModelSerializer):
 
 
 class AvailabilityRequestSerializer(serializers.ModelSerializer):
+    display_days = serializers.SerializerMethodField()
     is_completed = serializers.SerializerMethodField()
     task_id = serializers.SerializerMethodField()
     total_slots_count = serializers.SerializerMethodField()
@@ -106,8 +109,12 @@ class AvailabilityRequestSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'start_date', 'end_date',
             'start_hour', 'end_hour', 'cohort', 'assign_to_all',
             'deadline', 'is_active', 'created_at', 'is_completed',
-            'task_id', 'total_slots_count', 'filled_slots_count'
+            'display_days', 'task_id', 'total_slots_count', 'filled_slots_count'
         ]
+
+    def get_display_days(self, obj):
+        fellow = self.context['request'].user.fellow_profile
+        return localized_poll_days(obj, fellow.meeting_timezone)
 
     def get_is_completed(self, obj):
         request = self.context.get('request')

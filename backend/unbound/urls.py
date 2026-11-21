@@ -10,6 +10,7 @@ router.register(r'tasks', views.TaskViewSet, basename='task')
 router.register(r'meetings', views.MeetingAvailabilityViewSet, basename='meeting')
 
 urlpatterns = [
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon-light.png')),
     path('admin/logout/', LogoutView.as_view(next_page='/admin/login/'), name='admin-logout'),
     path('admin/', admin.site.urls),
     path('accounts/register/', views.register_code_view, name='register_code'),
@@ -32,6 +33,7 @@ urlpatterns = [
     # UNbound custom views
     path('', RedirectView.as_view(url='/dashboard/', permanent=False), name='index'),
     path('dashboard/', views.dashboard_view, name='dashboard'),
+    path('dashboard/badges/<int:pk>/icon.png', views.badge_icon, name='badge-icon'),
     path('dashboard/drive/', views.dashboard_view, {'drive': True}, name='dashboard-drive'),
     path('dashboard/drive/pins/<int:pk>/remove/', views.remove_drive_pin, name='remove-drive-pin'),
     path('dashboard/meetings/<int:pk>/calendar.ics', views.download_meeting, name='meeting-calendar'),

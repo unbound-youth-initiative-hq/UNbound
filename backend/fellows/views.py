@@ -36,8 +36,10 @@ from .google_api import (
     sync_user_calendar_availability,
     fetch_shared_calendar_events_in_range,
 )
+from .artwork import TASK_ICONS
+from .meeting_timezones import meeting_timezone_choices
 from .models import (
-    MeetingAvailability, Task, Fellow, FellowBadge, InviteCode, SDG, Cohort, CohortDriveLink,
+    MeetingAvailability, Task, Fellow, Badge, FellowBadge, InviteCode, SDG, Cohort, CohortDriveLink,
     AvailabilityRequest, ConfirmedMeeting, Phase, SharedDriveResource, availability_task_visibility_filter,
 )
 from .calendar_export import meeting_calendar
@@ -127,7 +129,8 @@ def dashboard_view(request, drive=False):
         'confirmed_meetings': confirmed_meetings_for(fellow).filter(ends_at__gt=timezone.now()),
         'accent_palette': fellow.accent_palette,
         'meeting_timezone': fellow.meeting_timezone,
-        'meeting_timezones': Fellow.MeetingTimezone.choices,
+        'meeting_timezones': meeting_timezone_choices(),
+        'task_icons': TASK_ICONS,
     })
 
 
@@ -473,6 +476,13 @@ class CohortSDGsAPIView(APIView):
         })
 
 
+@login_required(login_url='account_login')
+@require_safe
+def badge_icon(request, pk):
+    badge = get_object_or_404(Badge.objects.only('icon_png').exclude(icon_png=b''), pk=pk)
+    return HttpResponse(bytes(badge.icon_png), content_type='image/png')
+
+
 class BadgesAPIView(APIView):
     def get(self, request, *args, **kwargs):
         if not hasattr(request.user, 'fellow_profile'):
@@ -505,6 +515,8 @@ class BadgesAPIView(APIView):
                 'description': b.description,
                 'color': b.color,
                 'icon_class': b.icon_class,
+                'artwork': b.artwork,
+                'has_custom_icon': bool(b.icon_png),
                 'earned': fb.earned,
                 'progress': fb.progress,
                 'earned_at': fb.earned_at,
@@ -651,7 +663,7 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='requests')
     def requests(self, request):
-        """Returns all active When to Meet availability requests relevant to the current fellow."""
+        """Returns all active WhenBound availability requests relevant to the current fellow."""
         if not hasattr(request.user, 'fellow_profile'):
             return Response({'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -757,6 +769,7 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
         shared_email = getattr(settings, 'GOOGLE_SHARED_WORKSPACE_EMAIL', 'primary')
 
         if avail_request:
+            tz = ZoneInfo(settings.TIME_ZONE)
             active_fellows = Fellow.objects.filter(
                 role=Fellow.Role.FELLOW,
                 user__is_active=True,
@@ -969,13 +982,14 @@ class DashboardPreferencesAPIView(APIView):
             return Response({'status': 'error', 'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
 
         updates = {}
+        zones = dict(Fellow._meta.get_field('meeting_timezone').flatchoices)
         for field, choices, error in (
             ('accent_palette', Fellow.AccentPalette.values, 'Choose one of the available accent palettes.'),
-            ('meeting_timezone', Fellow.MeetingTimezone.values, 'Choose one of the available meeting time zones.'),
+            ('meeting_timezone', zones, 'Choose one of the available meeting time zones.'),
         ):
             if field in request.data:
                 value = request.data[field]
-                if value not in choices:
+                if not isinstance(value, str) or value not in choices:
                     return Response({'status': 'error', 'detail': error}, status=status.HTTP_400_BAD_REQUEST)
                 updates[field] = value
         if not updates:

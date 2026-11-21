@@ -1,0 +1,9 @@
+<div class="task-deadline-fields task-appearance-fields">
+  <label>Icon
+    <select class="input-field" name="icon">
+      {% for value, label in task_icons %}<option value="{{ value }}"{% if scope == 'team' and value == 'fa-pen-to-square' %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Color <input type="color" name="color" value="{% if scope == 'team' %}#00b4d8{% else %}#e0a009{% endif %}"></label>
+  <span class="proto-task-icon-box task-appearance-preview" aria-hidden="true"><i></i></span>
+</div>

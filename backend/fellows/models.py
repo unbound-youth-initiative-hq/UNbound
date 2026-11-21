@@ -7,6 +7,9 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils import timezone
 
+from .artwork import BadgeArtwork
+from .meeting_timezones import meeting_timezone_choices
+
 
 def generate_random_code():
     import secrets
@@ -235,14 +238,6 @@ class Fellow(models.Model):
         ROSE = 'rose', 'Rose'
         AMBER = 'amber', 'Amber'
 
-    class MeetingTimezone(models.TextChoices):
-        MONTERREY = 'America/Monterrey', 'Monterrey'
-        NEW_YORK = 'America/New_York', 'New York'
-        LOS_ANGELES = 'America/Los_Angeles', 'Los Angeles'
-        LONDON = 'Europe/London', 'London'
-        TOKYO = 'Asia/Tokyo', 'Tokyo'
-        UTC = 'UTC', 'UTC'
-
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -254,7 +249,7 @@ class Fellow(models.Model):
         default=AccentPalette.OCEAN,
     )
     meeting_timezone = models.CharField(
-        max_length=32, choices=MeetingTimezone.choices, default=MeetingTimezone.MONTERREY,
+        max_length=64, choices=meeting_timezone_choices, default='America/Monterrey',
     )
     chapter = models.ForeignKey(
         Chapter,
@@ -529,7 +524,7 @@ class GoogleTaskLink(models.Model):
 
 
 class AvailabilityRequest(models.Model):
-    """When to meet / availability request created by admin for a specific cohort or all fellows."""
+    """WhenBound / availability request created by admin for a specific cohort or all fellows."""
     title = models.CharField(max_length=200, help_text="e.g. Sprint 3 Sync Availability")
     description = models.TextField(blank=True, help_text="Instructions or context for the fellows.")
     start_date = models.DateField(help_text="Start date of the availability window.")
@@ -629,7 +624,7 @@ class AvailabilityRequest(models.Model):
             tasks = []
             for recipient in targets:
                 values = {
-                    'title': f"When2meet: {self.title}",
+                    'title': f"WhenBound: {self.title}",
                     'description': self.description or f"Submit your availability for {self.start_date.strftime('%b %d')} – {self.end_date.strftime('%b %d')}.",
                     'scope': Task.Scope.PERSONAL,
                     'source': Task.Source.UNBOUND,
@@ -656,8 +651,8 @@ class AvailabilityRequest(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        verbose_name = "When to Meet Request"
-        verbose_name_plural = "When to Meet Requests"
+        verbose_name = "WhenBound Request"
+        verbose_name_plural = "WhenBound Requests"
 
 
 class AvailabilitySubmission(models.Model):
@@ -730,11 +725,13 @@ class Badge(models.Model):
     description = models.TextField()
     color = models.CharField(max_length=20, default='#00B4D8')
     icon_class = models.CharField(max_length=50, default='fa-award')
+    artwork = models.CharField(max_length=20, choices=BadgeArtwork, blank=True)
+    icon_png = models.BinaryField(blank=True, default=bytes)
     order = models.PositiveIntegerField(default=0)
 
     trigger_type = models.CharField(max_length=20, choices=TriggerType.choices, default=TriggerType.MANUAL)
     required_task_count = models.PositiveIntegerField(default=0, help_text="Number of completed tasks required to unlock.")
-    required_phase = models.CharField(max_length=50, blank=True, help_text="Phase required (e.g. Prototype, Graduation).")
+    required_phase = models.CharField(max_length=50, blank=True, help_text="Phase required for a project-phase award.")
     xp_reward = models.PositiveIntegerField(default=100, help_text="XP awarded when badge is earned.")
 
     def __str__(self):

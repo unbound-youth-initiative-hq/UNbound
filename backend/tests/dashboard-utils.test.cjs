@@ -25,15 +25,15 @@ test('timed deadlines display in Monterrey and the edit button is owner-only', (
   const timedTask = { ...task, due_date: '2026-12-01', due_time: '00:30' };
   const reader = taskCardsMarkup([timedTask], '');
   assert.ok(reader.includes('12:30 AM Monterrey time'));
-  assert.ok(!reader.includes('Edit deadline'));
+  assert.ok(!reader.includes('Edit task details'));
   const owner = taskCardsMarkup([{ ...timedTask, can_edit: true, due_time: '15:30' }], '');
   assert.ok(owner.includes('3:30 PM Monterrey time'));
   assert.ok(owner.includes('data-due-time="15:30"'));
-  assert.ok(owner.includes('Edit deadline'));
+  assert.ok(owner.includes('Edit task details'));
 });
 test('availability tasks are completed through Meeting Hub and respect status permission', () => {
   const html = taskCardsMarkup([{ ...task, availability_request_id: 9, can_change_status: false }], '');
-  assert.ok(html.includes('openWhenToMeet(9)'));
+  assert.ok(html.includes('openWhenBound(9)'));
   assert.ok(!html.includes('updateTaskStatus'));
   assert.ok(!taskCardsMarkup([{ ...task, can_change_status: false }], '').includes('updateTaskStatus'));
 });
@@ -42,7 +42,7 @@ test('IDs and statuses cannot introduce script into event handlers or classes', 
   assert.equal(taskCardsMarkup([{ ...task, id: '12);alert(1)//' }], ''), '');
   const html = taskCardsMarkup([{ ...task, status: '\" onmouseover=alert(1)', availability_request_id: '9);alert(1)' }], '');
   assert.ok(!html.includes('onmouseover'));
-  assert.ok(!html.includes('openWhenToMeet'));
+  assert.ok(!html.includes('openWhenBound'));
 });
 
 test('dynamic phase names are escaped and an unknown current phase marks none completed', () => {

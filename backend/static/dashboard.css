@@ -19,9 +19,9 @@
   --green-soft:   #e4f6ec;
   --amber:        #e0a009;
   --amber-soft:   #fdf3da;
-  --display:      'Geist', system-ui, sans-serif;
-  --sans:         'Geist', system-ui, sans-serif;
-  --mono:         'IBM Plex Mono', ui-monospace, monospace;
+  --display:      'Montserrat', system-ui, sans-serif;
+  --sans:         'Montserrat', system-ui, sans-serif;
+  --mono:         var(--sans);
   --sidebar-w:    268px;
   --radius:       16px;
 }
@@ -146,14 +146,6 @@ img { display: block; max-width: 100%; }
   margin-top: 6px;
 }
 
-.btn-view-tasks {
-  padding: 12px 22px;
-  border-radius: 12px;
-  font-size: 14.5px;
-  font-weight: 700;
-  background: var(--accent);
-  box-shadow: 0 6px 18px rgba(0, 180, 216, 0.3);
-}
 
 .dash-stat-grid {
   display: grid;
@@ -235,7 +227,7 @@ img { display: block; max-width: 100%; }
 .card-title-left h3 { font-size: 17px; font-weight: 700; color: var(--ink); }
 .icon-cyan-text { color: var(--accent); font-size: 18px; }
 
-.phases-pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.phases-pipeline { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .phase-step { display: flex; flex-direction: column; }
 .step-line { height: 6px; background: #e2ebf2; border-radius: 999px; margin-bottom: 12px; }
 .phase-step.completed .step-line { background: #1f9d57; }
@@ -565,7 +557,7 @@ img { display: block; max-width: 100%; }
   .phases-pipeline { grid-template-columns: 1fr; }
 }
 
-/* ---- WHEN TO MEET ENHANCEMENTS ---- */
+/* ---- WhenBound ENHANCEMENTS ---- */
 .w2m-request-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
 .w2m-card-inner { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
 .w2m-card-left { flex: 1; min-width: 260px; }
@@ -639,8 +631,8 @@ body {
 .card { border-color: rgba(255, 255, 255, .88); }
 .dash-stat-card { transition: transform .2s ease, box-shadow .2s ease; }
 .dash-stat-card:hover { transform: translateY(-2px); box-shadow: 0 16px 38px rgba(29, 86, 116, .11); }
-.btn-primary, .btn-view-tasks { background: linear-gradient(130deg, var(--accent), var(--accent-dk)); box-shadow: 0 7px 18px var(--accent-soft); }
-.btn-primary:hover, .btn-view-tasks:hover { background: var(--accent-dk); }
+.btn-primary { background: linear-gradient(130deg, var(--accent), var(--accent-dk)); box-shadow: 0 7px 18px var(--accent-soft); }
+.btn-primary:hover { background: var(--accent-dk); }
 .btn-ghost { background: rgba(255, 255, 255, .66); }
 .project-banner-card, .badges-level-banner {
   color: var(--ink);
@@ -901,3 +893,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .dashboard-notice { transition:none; }
 }
+
+.task-appearance-fields { align-items: end; }
+.task-appearance-fields input[type="color"] { display: block; width: 100%; height: 40px; margin-top: 5px; cursor: pointer; }
+.task-appearance-preview { align-self: end; margin-bottom: 2px; }

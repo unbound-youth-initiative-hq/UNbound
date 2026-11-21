@@ -2,113 +2,6 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q
 
-DEFAULT_BADGES = [
-    {
-        'name': 'Liftoff',
-        'slug': 'liftoff',
-        'description': 'Joined the Fellowship and set up your team.',
-        'color': '#00B4D8',
-        'icon_class': 'fa-paintbrush',
-        'order': 1,
-        'trigger_type': 'task_count',
-        'required_task_count': 1,
-        'xp_reward': 150,
-    },
-    {
-        'name': 'Empathy Explorer',
-        'slug': 'empathy-explorer',
-        'description': 'Completed community empathy interviews.',
-        'color': '#7c5cff',
-        'icon_class': 'fa-magnifying-glass',
-        'order': 2,
-        'trigger_type': 'task_count',
-        'required_task_count': 3,
-        'xp_reward': 200,
-    },
-    {
-        'name': 'Goal Setter',
-        'slug': 'goal-setter',
-        'description': 'Selected and mapped your project SDGs.',
-        'color': '#1f9d57',
-        'icon_class': 'fa-bullseye',
-        'order': 3,
-        'trigger_type': 'task_count',
-        'required_task_count': 4,
-        'xp_reward': 200,
-    },
-    {
-        'name': 'Team Player',
-        'slug': 'team-player',
-        'description': 'Logged availability and synced with your cohort.',
-        'color': '#e0a009',
-        'icon_class': 'fa-users',
-        'order': 4,
-        'trigger_type': 'availability',
-        'xp_reward': 200,
-    },
-    {
-        'name': 'Builder',
-        'slug': 'builder',
-        'description': 'Ship your first project prototype.',
-        'color': '#0090b3',
-        'icon_class': 'fa-wrench',
-        'order': 5,
-        'trigger_type': 'task_count',
-        'required_task_count': 5,
-        'xp_reward': 250,
-    },
-    {
-        'name': 'Storyteller',
-        'slug': 'storyteller',
-        'description': 'Deliver your Launch Sequence pitch.',
-        'color': '#2a5068',
-        'icon_class': 'fa-comment-dots',
-        'order': 6,
-        'trigger_type': 'project_phase',
-        'required_phase': 'Launch Sequence',
-        'xp_reward': 300,
-    },
-    {
-        'name': 'Changemaker',
-        'slug': 'changemaker',
-        'description': 'Reach 100 people with your project.',
-        'color': '#ef4d62',
-        'icon_class': 'fa-heart',
-        'order': 7,
-        'trigger_type': 'task_count',
-        'required_task_count': 10,
-        'xp_reward': 350,
-    },
-    {
-        'name': 'Mentor Magnet',
-        'slug': 'mentor-magnet',
-        'description': 'Complete all mentor 1:1 check-ins.',
-        'color': '#90E0EF',
-        'icon_class': 'fa-star',
-        'order': 8,
-        'trigger_type': 'task_count',
-        'required_task_count': 7,
-        'xp_reward': 250,
-    },
-    {
-        'name': 'Touchdown',
-        'slug': 'touchdown',
-        'description': 'Graduate the Fellowship.',
-        'color': '#167a43',
-        'icon_class': 'fa-circle-check',
-        'order': 9,
-        'trigger_type': 'project_phase',
-        'required_phase': 'Graduation',
-        'xp_reward': 500,
-    },
-]
-
-
-def ensure_default_badges_exist():
-    from .models import Badge
-    for item in DEFAULT_BADGES:
-        Badge.objects.get_or_create(slug=item['slug'], defaults=item)
-
 
 @transaction.atomic
 def evaluate_and_sync_badges(fellow):
@@ -119,8 +12,6 @@ def evaluate_and_sync_badges(fellow):
     # Serialize progress updates for this fellow so overlapping task/submission
     # requests cannot overwrite XP calculated from a newer completion.
     locked_fellow = Fellow.objects.select_for_update().get(pk=fellow.pk)
-
-    ensure_default_badges_exist()
 
     task_audience = Q(assigned_to=fellow)
     if fellow.cohort_id:
