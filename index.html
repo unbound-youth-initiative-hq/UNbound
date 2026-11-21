@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>UNbound Youth Initiative — Student-Led Global Leadership Fellowship</title>
-  <meta name="description" content="UNbound is a free, virtual, student-led leadership fellowship connecting schools in six countries. Fellows lead real community impact projects — at zero cost, always." />
+  <meta name="description" content="UNbound is a free, virtual, student-led leadership fellowship connecting schools in ten countries. Fellows lead real community impact projects — at zero cost, always." />
   <link rel="canonical" href="https://unboundyi.org/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="UNbound Youth Initiative" />
   <meta property="og:title" content="UNbound Youth Initiative — Leadership unbound by borders" />
-  <meta property="og:description" content="A free, student-led leadership fellowship connecting schools across six countries." />
+  <meta property="og:description" content="A free, student-led leadership fellowship connecting schools across ten countries." />
   <meta property="og:url" content="https://unboundyi.org/" />
   <meta property="og:image" content="https://res.cloudinary.com/dqdwodhhe/image/upload/c_fill,w_1200,h_630,q_auto,f_jpg/1_o3cnce" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -28,7 +28,7 @@
     "name": "UNbound Youth Initiative",
     "url": "https://unboundyi.org/",
     "logo": "https://unboundyi.org/logo.png",
-    "description": "A free, virtual, student-led leadership fellowship connecting schools in six countries."
+    "description": "A free, virtual, student-led leadership fellowship connecting schools in ten countries."
   }
   </script>
   <style>
@@ -270,7 +270,7 @@
     }
     .marquee-track {
       display: flex; width: max-content;
-      animation: marqueeScroll 24s linear infinite;
+      animation: marqueeScroll 40s linear infinite;
     }
     .marquee-track:hover { animation-play-state: paused; }
     .marquee-item {
@@ -279,7 +279,7 @@
       letter-spacing: 0.14em; text-transform: uppercase;
       color: rgba(255,255,255,0.72); white-space: nowrap; font-weight: 500;
     }
-    .marquee-item .flag { font-size: 20px; line-height: 1; }
+    .marquee-item .flag { width: 24px; height: 18px; display: block; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,0.12); }
     .marquee-sep { color: var(--accent); opacity: 0.35; padding: 0 8px; }
     @keyframes marqueeScroll {
       from { transform: translateX(0); }
@@ -615,11 +615,12 @@
       footer .brand-col { grid-column: 1 / -1; }
       nav.top .menu-pill { display: none; }
       .mission-stats { display: flex; flex-wrap: wrap; justify-content: center; }
-      .mstat { flex: 0 0 40%; border-left: 1px solid var(--border); padding: 26px 8px; }
-      .mstat:nth-child(n+3) { flex-basis: 33.333%; }
-      .mission-stats .mstat:nth-child(1), .mission-stats .mstat:nth-child(3) { border-left: none; }
+      .mstat { flex: 0 0 33.333%; min-width: 0; border-left: 1px solid var(--border); padding: 26px 8px; }
+      .mstat:nth-child(n+4) { flex-basis: 40%; }
+      .mission-stats .mstat:nth-child(1), .mission-stats .mstat:nth-child(4) { border-left: none; }
       @media (max-width: 460px) {
         .mstat { padding: 26px 6px; }
+        .mstat-n { font-size: 36px; }
         .mstat-l { font-size: 11px; letter-spacing: 0.08em; }
       }
       .speakers-grid { grid-template-columns: 1fr; gap: 20px; }
@@ -948,18 +949,26 @@
 <!-- MARQUEE -->
 <div class="marquee-strip" aria-hidden="true">
   <div class="marquee-track">
-    <div class="marquee-item"><span class="flag">🇯🇵</span> Japan</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇰🇷</span> Korea</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇫🇷</span> France</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇲🇽</span> Mexico</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇺🇸</span> United States</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇨🇴</span> Colombia</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇯🇵</span> Japan</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇰🇷</span> Korea</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇫🇷</span> France</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇲🇽</span> Mexico</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇺🇸</span> United States</div><span class="marquee-sep">·</span>
-    <div class="marquee-item"><span class="flag">🇨🇴</span> Colombia</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/jp.svg" alt="" width="24" height="18" /> Japan</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/kr.svg" alt="" width="24" height="18" /> Korea</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/fr.svg" alt="" width="24" height="18" /> France</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/mx.svg" alt="" width="24" height="18" /> Mexico</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/us.svg" alt="" width="24" height="18" /> United States</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/co.svg" alt="" width="24" height="18" /> Colombia</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/sv.svg" alt="" width="24" height="18" /> El Salvador</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/gt.svg" alt="" width="24" height="18" /> Guatemala</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/pa.svg" alt="" width="24" height="18" /> Panamá</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/ni.svg" alt="" width="24" height="18" /> Nicaragua</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/jp.svg" alt="" width="24" height="18" /> Japan</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/kr.svg" alt="" width="24" height="18" /> Korea</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/fr.svg" alt="" width="24" height="18" /> France</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/mx.svg" alt="" width="24" height="18" /> Mexico</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/us.svg" alt="" width="24" height="18" /> United States</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/co.svg" alt="" width="24" height="18" /> Colombia</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/sv.svg" alt="" width="24" height="18" /> El Salvador</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/gt.svg" alt="" width="24" height="18" /> Guatemala</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/pa.svg" alt="" width="24" height="18" /> Panamá</div><span class="marquee-sep">·</span>
+    <div class="marquee-item"><img class="flag" src="img/flags/ni.svg" alt="" width="24" height="18" /> Nicaragua</div><span class="marquee-sep">·</span>
   </div>
 </div>
 
@@ -973,10 +982,10 @@
       <p>We challenge the traditional, silo-centric "club" model by cultivating multi-stakeholder, SDG-aligned action plans that elevate student agency and transform extracurricular learning into something far more ambitious.</p>
     </div>
     <div class="mission-stats" id="mission-stats">
-      <div class="mstat"><div class="mstat-n" data-count="8">0</div><div class="mstat-l">Partner Institutions</div></div>
-      <div class="mstat"><div class="mstat-n" data-count="24">0</div><div class="mstat-l">Fellows &amp; Alumni</div></div>
-      <div class="mstat"><div class="mstat-n" data-count="6">0</div><div class="mstat-l">Countries Represented</div></div>
-      <div class="mstat"><div class="mstat-n" data-count="560">0</div><div class="mstat-l">People Served</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="20" data-suffix="+">0</div><div class="mstat-l">Partner Institutions</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="100" data-suffix="+">0</div><div class="mstat-l">Fellows &amp; Alumni</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="10">0</div><div class="mstat-l">Countries Represented</div></div>
+      <div class="mstat"><div class="mstat-n" data-count="1000" data-suffix="+">0</div><div class="mstat-l">People Served</div></div>
       <div class="mstat"><div class="mstat-n">$0</div><div class="mstat-l">Cost for Every Fellow, Always</div></div>
     </div>
   </div>
@@ -1120,11 +1129,11 @@
       </div>
     </div>
     <div class="speaker-card">
-      <div class="speaker-photo"><img src="https://res.cloudinary.com/dqdwodhhe/image/upload/f_auto,q_auto,w_800/v1780815842/Seung_yqom2q.avif" alt="Seung" loading="lazy" decoding="async" style="object-position: 60% 20%;" /></div>
+      <div class="speaker-photo"><img src="img/Kehkashan.jpg" alt="Kehkashan Basu" loading="lazy" decoding="async" style="object-position: 50% 40%;" /></div>
       <div class="speaker-body">
-        <h3>Seung Paik</h3>
-        <div class="speaker-role">RETIRED COLONEL · U.S. AIR FORCE</div>
-        <p>While teaching at the U.S. Air Force Academy, Seung created Leadernomics, a framework that has spent 20 years reaching leaders across government, the private sector, and academia. After 25 years of military service and a career of award-winning leadership, Seung strives to transform with his core belief in the power of "what is" and "what should be."</p>
+        <h3>Kehkashan Basu</h3>
+        <div class="speaker-role">INTERNATIONAL CHILDREN&rsquo;S PEACE PRIZE WINNER</div>
+        <p>At 12, Kehkashan founded Green Hope Foundation, a youth-led organization now empowering young people in more than 20 countries through education for sustainable development. Winner of the 2016 International Children's Peace Prize, she has spoken at the UN on youth and climate. At UNbound, Kehkashan will show Fellows that age is never a barrier to leading global change.</p>
       </div>
     </div>
   </div>
@@ -1218,7 +1227,7 @@
   </div>
   <div class="bot">
     <span>© 2026 UNbound Youth Initiative</span>
-    <span class="foot-countries">MEXICO · UNITED STATES · COLOMBIA · JAPAN · KOREA · FRANCE</span>
+    <span class="foot-countries">MEXICO · GUATEMALA · EL SALVADOR · NICARAGUA · PANAMÁ · COLOMBIA · UNITED STATES · JAPAN · KOREA · FRANCE</span>
     <span>Est. 2025</span>
   </div>
 </footer>
@@ -1546,13 +1555,15 @@
       if (missionRunning) return; missionRunning = true;
       missionNums.forEach(el => {
         const target = parseInt(el.getAttribute('data-count'), 10);
+        const suffix = el.getAttribute('data-suffix') || '';
+        const fmt = n => n.toLocaleString('en-US') + suffix;
         const dur = 3000, t0 = performance.now();
         function tick(now) {
           if (!missionRunning) return;
           const p = Math.min((now - t0) / dur, 1);
           const eased = 1 - Math.pow(1 - p, 3);
-          el.textContent = Math.round(eased * target);
-          if (p < 1) requestAnimationFrame(tick); else el.textContent = target;
+          el.textContent = fmt(Math.round(eased * target));
+          if (p < 1) requestAnimationFrame(tick); else el.textContent = fmt(target);
         }
         requestAnimationFrame(tick);
       });
