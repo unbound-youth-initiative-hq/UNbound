@@ -9,6 +9,7 @@ class TaskSerializer(serializers.ModelSerializer):
     can_edit = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
     can_change_status = serializers.SerializerMethodField()
+    due_time = serializers.TimeField(format='%H:%M', input_formats=['%H:%M'], required=False, allow_null=True)
     availability_request_id = serializers.PrimaryKeyRelatedField(
         source='availability_request',
         read_only=True
@@ -18,7 +19,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'title', 'description', 'scope', 'status', 'source',
-            'assigned_to', 'cohort', 'icon', 'color', 'due_date', 'created_at',
+            'assigned_to', 'cohort', 'icon', 'color', 'due_date', 'due_time', 'created_at',
             'availability_request_id', 'can_edit', 'can_delete', 'can_change_status',
         ]
         read_only_fields = ['id', 'created_at', 'source', 'assigned_to', 'cohort', 'availability_request_id']
@@ -62,6 +63,13 @@ class TaskSerializer(serializers.ModelSerializer):
                 raise PermissionDenied('You can update the status of this assignment, but only its owner or staff can edit it.')
         elif attrs.get('scope') == Task.Scope.TEAM and not fellow.cohort_id:
             raise serializers.ValidationError({'scope': 'Join a cohort before creating a team task.'})
+
+        due_date = attrs.get('due_date', getattr(self.instance, 'due_date', None))
+        due_time = attrs.get('due_time', getattr(self.instance, 'due_time', None))
+        if due_time is not None and due_date is None:
+            if 'due_time' in attrs:
+                raise serializers.ValidationError({'due_date': 'Choose a date for this deadline time.'})
+            attrs['due_time'] = None
         return attrs
 
 

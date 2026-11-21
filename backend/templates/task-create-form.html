@@ -1,0 +1,11 @@
+<form class="task-create-form" data-task-scope="{{ scope }}">
+  <div class="add-task-form">
+    <input type="text" name="title" aria-label="{{ title_label }}" placeholder="{{ placeholder }}" maxlength="300" required />
+    <button class="btn btn-primary" type="submit">Add</button>
+  </div>
+  <details class="task-deadline-options">
+    <summary>Set a deadline</summary>
+    {% include 'task-deadline-fields.html' %}
+  </details>
+  <p class="form-feedback" role="alert"></p>
+</form>

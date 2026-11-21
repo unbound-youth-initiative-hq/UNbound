@@ -21,6 +21,16 @@ test('assignment permissions keep completion while hiding unauthorized deletion'
   assert.ok(taskCardsMarkup([{ ...task, can_delete: true }], '').includes('deleteTask(12)'));
 });
 
+test('timed deadlines display in Monterrey and the edit button is owner-only', () => {
+  const timedTask = { ...task, due_date: '2026-12-01', due_time: '00:30' };
+  const reader = taskCardsMarkup([timedTask], '');
+  assert.ok(reader.includes('12:30 AM Monterrey time'));
+  assert.ok(!reader.includes('Edit deadline'));
+  const owner = taskCardsMarkup([{ ...timedTask, can_edit: true, due_time: '15:30' }], '');
+  assert.ok(owner.includes('3:30 PM Monterrey time'));
+  assert.ok(owner.includes('data-due-time="15:30"'));
+  assert.ok(owner.includes('Edit deadline'));
+});
 test('availability tasks are completed through Meeting Hub and respect status permission', () => {
   const html = taskCardsMarkup([{ ...task, availability_request_id: 9, can_change_status: false }], '');
   assert.ok(html.includes('openWhenToMeet(9)'));

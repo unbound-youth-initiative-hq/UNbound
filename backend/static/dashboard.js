@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     notice.addEventListener('focusout', schedule);
     schedule();
   });
-  const { escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup } = window.UNboundUI;
+  const { escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime } = window.UNboundUI;
 
   /* The portal's CSRF secret belongs to its session, independently of Admin. */
   const csrftoken = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -190,10 +190,11 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     list.innerHTML = rows.length ? rows.map(task => {
       const date = task.label === 'Due today' ? '' : ' · ' + escapeHtml(formatShortDate(task.due_date));
+      const time = task.due_time ? ' · ' + formatTaskTime(task.due_time) : '';
       return '<div class="nextup-item"><div class="nextup-info">' +
         '<div class="nextup-title">' + escapeHtml(task.title) + '</div>' +
         '<div class="nextup-meta' + (task.overdue ? ' deadline-overdue' : '') + '">' +
-        task.label + date + '</div></div></div>';
+        task.label + date + time + '</div></div></div>';
     }).join('') + '<button class="btn btn-ghost btn-sm" type="button" onclick="showView(\'tasks\')">Open Tasks</button>'
       : '<p class="empty-state">No upcoming or overdue task deadlines.</p>';
   }
@@ -599,53 +600,93 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(() => alert('Failed to delete task.'));
   };
 
-  const teamForm = document.getElementById('teamTaskForm');
-  if (teamForm) {
-    teamForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const input = document.getElementById('inputTeamTaskTitle');
-      const title = input.value.trim();
-      if (!title) return;
-
-      fetch('/api/tasks/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrftoken
-        },
-        body: JSON.stringify({ title, scope: 'team', icon: 'fa-pen-to-square', color: '#00B4D8' })
-      })
-        .then(readJsonResponse)
-        .then(() => {
-          input.value = '';
-          loadTasks();
-        })
-        .catch(error => alert(error.message || 'Could not create task. Your text has been kept.'));
-    });
+  function taskDeadlineFields(form) {
+    const date = form.elements.due_date;
+    const time = form.elements.due_time;
+    const syncTime = () => {
+      time.disabled = !date.value;
+      if (time.disabled) time.value = '';
+    };
+    date.addEventListener('input', syncTime);
+    return {
+      values: () => ({ due_date: date.value || null, due_time: time.value || null }),
+      set: (dueDate, dueTime) => {
+        date.value = dueDate || '';
+        time.value = dueTime || '';
+        syncTime();
+      },
+    };
   }
 
-  const personalForm = document.getElementById('personalTaskForm');
-  if (personalForm) {
-    personalForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const input = document.getElementById('inputPersonalTaskTitle');
-      const title = input.value.trim();
-      if (!title) return;
+  function saveTask(url, method, data) {
+    return fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify(data),
+    }).then(readJsonResponse);
+  }
 
-      fetch('/api/tasks/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrftoken
-        },
-        body: JSON.stringify({ title, scope: 'personal', icon: 'fa-user-check', color: '#e0a009' })
-      })
-        .then(readJsonResponse)
-        .then(() => {
-          input.value = '';
-          loadTasks();
-        })
-        .catch(error => alert(error.message || 'Could not create task. Your text has been kept.'));
+  document.querySelectorAll('[data-task-scope]').forEach(form => {
+    const deadline = taskDeadlineFields(form);
+    const feedback = form.querySelector('.form-feedback');
+    const submit = form.querySelector('[type="submit"]');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const title = form.elements.title.value.trim();
+      if (!title || submit.disabled) return;
+      feedback.textContent = '';
+      submit.disabled = true;
+      try {
+        await saveTask('/api/tasks/', 'POST', { title, scope: form.dataset.taskScope, ...deadline.values() });
+        form.reset();
+        deadline.set(null, null);
+        form.querySelector('details').open = false;
+        loadTasks();
+      } catch (error) {
+        feedback.textContent = error.message;
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  });
+
+  const deadlineDialog = document.getElementById('taskDeadlineDialog');
+  if (deadlineDialog) {
+    const form = document.getElementById('taskDeadlineForm');
+    const deadline = taskDeadlineFields(form);
+    const feedback = form.querySelector('.form-feedback');
+    const submit = form.querySelector('[type="submit"]');
+    const cancel = form.querySelector('[type="button"]');
+
+    document.getElementById('view-tasks').addEventListener('click', event => {
+      const button = event.target.closest('[data-task-deadline-id]');
+      if (!button) return;
+      form.dataset.taskId = button.dataset.taskDeadlineId;
+      document.getElementById('taskDeadlineTitle').textContent = button.dataset.taskTitle;
+      deadline.set(button.dataset.dueDate, button.dataset.dueTime);
+      feedback.textContent = '';
+      deadlineDialog.showModal();
+    });
+    cancel.addEventListener('click', () => deadlineDialog.close());
+    deadlineDialog.addEventListener('cancel', event => {
+      if (submit.disabled) event.preventDefault();
+    });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (submit.disabled) return;
+      const id = recordId(form.dataset.taskId);
+      if (!id) return;
+      feedback.textContent = '';
+      submit.disabled = cancel.disabled = true;
+      try {
+        await saveTask(`/api/tasks/${id}/`, 'PATCH', deadline.values());
+        deadlineDialog.close();
+        loadTasks();
+      } catch (error) {
+        feedback.textContent = error.message;
+      } finally {
+        submit.disabled = cancel.disabled = false;
+      }
     });
   }
 
@@ -1557,9 +1598,49 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const tzSelect = document.getElementById('tzSelect');
-  if (tzSelect) {
-    tzSelect.addEventListener('change', () => loadMeetingHub(currentRequestId));
-  }
+  const settingsTimezone = document.getElementById('settingsTimezone');
+  const timezoneControls = [tzSelect, settingsTimezone].filter(Boolean);
+  const timezoneFeedback = [
+    document.getElementById('meetingTimezoneStatus'),
+    document.getElementById('settingsTimezoneStatus'),
+  ].filter(Boolean);
+  let meetingTimezone = tzSelect?.value || settingsTimezone?.value || 'America/Monterrey';
+
+  timezoneControls.forEach(control => {
+    control.addEventListener('change', async () => {
+      const selected = control.value;
+      timezoneControls.forEach(select => { select.disabled = true; });
+      timezoneFeedback.forEach(status => { status.textContent = 'Saving meeting time zone…'; });
+      try {
+        const response = await fetch('/api/dashboard/preferences/', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ meeting_timezone: selected }),
+        });
+        const data = await readJsonResponse(response);
+        meetingTimezone = data.meeting_timezone;
+        document.querySelectorAll('[data-meeting-time]').forEach(element => {
+          const options = {
+            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+            timeZone: meetingTimezone, timeZoneName: 'short',
+          };
+          if (element.dataset.meetingTime !== 'short') options.weekday = 'short';
+          element.textContent = new Intl.DateTimeFormat('en-US', options).format(new Date(element.dateTime));
+        });
+        timezoneFeedback.forEach(status => { status.textContent = 'Meeting time zone saved.'; });
+      } catch (error) {
+        timezoneFeedback.forEach(status => { status.textContent = error.message; });
+      } finally {
+        timezoneControls.forEach(select => {
+          select.value = meetingTimezone;
+          select.disabled = false;
+        });
+      }
+      if (document.getElementById('view-meetings')?.classList.contains('active')) {
+        loadMeetingHub(currentRequestId);
+      }
+    });
+  });
 
   /* ---------- Milestones & Achievements Controller ---------- */
   function loadBadges() {

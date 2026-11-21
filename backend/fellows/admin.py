@@ -192,6 +192,8 @@ def pending_tasks_for_fellow(fellow):
         0 if task.source == Task.Source.UNBOUND else 1,
         0 if task.availability_request_id else 1,
         task.due_date or date.max,
+        task.due_time is None,
+        task.due_time,
         task.created_at,
         task.pk,
     ))
@@ -219,6 +221,8 @@ def pending_tasks_email(fellow, tasks):
             labels.insert(0, "WHEN2MEET")
         labels.append("Team" if task.scope == Task.Scope.TEAM else "Individual")
         due = f" — due {task.due_date.strftime('%b %d, %Y')}" if task.due_date else ""
+        if task.due_time:
+            due += f" at {task.due_time:%I:%M %p} Monterrey time"
         lines.append(f"- [{ ' · '.join(labels) }] {task.title}{due}")
         if task.description:
             lines.append(f"  {task.description}")
@@ -239,7 +243,7 @@ class FellowAdmin(admin.ModelAdmin):
     fieldsets = [
         ('Fellow', {'fields': ('user', 'role', 'chapter', 'cohort')}),
         ('Progress', {'fields': ('get_current_phase', 'xp_points')}),
-        ('Preferences', {'fields': ('accent_palette',), 'classes': ('collapse',)}),
+        ('Preferences', {'fields': ('accent_palette', 'meeting_timezone'), 'classes': ('collapse',)}),
     ]
 
     @admin.display(description='Current Phase')
@@ -323,11 +327,11 @@ class TaskEditForm(forms.ModelForm):
 class TaskAdmin(admin.ModelAdmin):
     form = TaskEditForm
     change_list_template = "admin/fellows/task/change_list.html"
-    list_display = ['title', 'assigned_to', 'scope', 'status', 'source', 'due_date', 'created_at']
+    list_display = ['title', 'assigned_to', 'scope', 'status', 'source', 'due_date', 'due_time', 'created_at']
     list_filter = ['status', 'scope', 'source']
     search_fields = ['title', 'description']
     list_select_related = ['assigned_to__user', 'cohort']
-    fieldsets = [('Assignment', {'fields': ('title', 'description', 'source', 'status', 'due_date')}), ('Who completes it', {'fields': ('scope', 'assigned_to', 'cohort')}), ('Appearance', {'fields': ('icon', 'color'), 'classes': ('collapse',)})]
+    fieldsets = [('Assignment', {'fields': ('title', 'description', 'source', 'status', ('due_date', 'due_time'))}), ('Who completes it', {'fields': ('scope', 'assigned_to', 'cohort')}), ('Appearance', {'fields': ('icon', 'color'), 'classes': ('collapse',)})]
     autocomplete_fields = ['assigned_to', 'cohort']
 
     def add_view(self, request, form_url='', extra_context=None):

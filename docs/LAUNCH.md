@@ -5,7 +5,7 @@ The launch build defaults to `GOOGLE_INTEGRATIONS_ENABLED=false`. It requests on
 ## What is available
 
 - Invitation enrollment and returning Google sign-in using personal Google accounts.
-- Coordinator Drive resources for all or selected cohorts, fellow pins, confirmed meetings and upcoming or overdue deadlines. Run `python manage.py migrate --noinput` through `0015_shared_resources_and_confirmed_meetings` and `python manage.py setup_staff_group` before deploying the updated dashboard.
+- Coordinator Drive resources for all or selected cohorts, fellow pins, confirmed meetings and upcoming or overdue deadlines. Run `python manage.py migrate --noinput` through `0016_task_deadline_and_meeting_timezone` and `python manage.py setup_staff_group` before deploying the updated dashboard.
 - Staff administration, cohorts, phase catalog, individual and shared-team assignments.
 - Manual When2Meet selection, submission and group availability, including linked assignment completion.
 - Badges, SDGs, dashboard progress and personalization.

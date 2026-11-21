@@ -235,6 +235,14 @@ class Fellow(models.Model):
         ROSE = 'rose', 'Rose'
         AMBER = 'amber', 'Amber'
 
+    class MeetingTimezone(models.TextChoices):
+        MONTERREY = 'America/Monterrey', 'Monterrey'
+        NEW_YORK = 'America/New_York', 'New York'
+        LOS_ANGELES = 'America/Los_Angeles', 'Los Angeles'
+        LONDON = 'Europe/London', 'London'
+        TOKYO = 'Asia/Tokyo', 'Tokyo'
+        UTC = 'UTC', 'UTC'
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -244,6 +252,9 @@ class Fellow(models.Model):
         max_length=12,
         choices=AccentPalette.choices,
         default=AccentPalette.OCEAN,
+    )
+    meeting_timezone = models.CharField(
+        max_length=32, choices=MeetingTimezone.choices, default=MeetingTimezone.MONTERREY,
     )
     chapter = models.ForeignKey(
         Chapter,
@@ -350,6 +361,7 @@ class Task(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     due_date = models.DateField(null=True, blank=True)
+    due_time = models.TimeField(null=True, blank=True, help_text='Optional Monterrey time for a self-created task.')
 
     google_task_id = models.CharField(max_length=200, blank=True)
     availability_request = models.ForeignKey(
@@ -496,6 +508,12 @@ class Task(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(due_time__isnull=True) | models.Q(due_date__isnull=False, source='self'),
+                name='task_due_time_requires_self_task_and_date',
+            ),
+        ]
 
 
 class GoogleTaskLink(models.Model):

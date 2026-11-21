@@ -1,5 +1,6 @@
 {% load static %}
 {% load socialaccount %}
+{% load tz %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,9 +10,9 @@
   <title>Fellow Dashboard - UNbound</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261121-cohort-schedule" />
+  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261121-deadline-preferences" />
 </head>
 <body data-google-integrations-enabled="{{ google_integrations_enabled|yesno:'true,false' }}" data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}" data-accent="{{ accent_palette|default:'ocean' }}">
   <aside class="sidebar" id="sidebar">
@@ -79,7 +80,7 @@
         <!-- Hero Welcome Header -->
         <div class="dash-welcome-row">
           <div>
-            <div class="eyebrow">FELLOW DASHBOARD</div>
+            <div class="eyebrow">Fellow dashboard</div>
             <h1 class="welcome-title">Welcome back, <span id="dashFirstName">Fellow</span> 👋</h1>
             <div class="dash-sub-line">
               <span id="dashCohortName">Loading cohort…</span> · Phase: <strong id="dashCurrentPhase">Loading…</strong>
@@ -120,24 +121,23 @@
         <div class="dash-main-grid">
           <!-- LEFT MAIN STACK -->
           <div class="dash-stack">
-            <!-- Dark Teal Project Banner Card -->
             <div class="card project-banner-card">
-              <div class="eyebrow project-eyebrow">YOUR PROJECT</div>
+              <div class="eyebrow project-eyebrow">Your project</div>
               <h2 class="project-title" id="dashProjectName">Loading project…</h2>
               
               <div class="project-meta-row">
                 <div class="meta-col">
-                  <div class="meta-label">CURRENT PHASE</div>
+                  <div class="meta-label">Current phase</div>
                   <div class="meta-value phase-pill"><span class="rocket-emoji">🚀</span> <span id="dashBannerPhase">Loading…</span></div>
                 </div>
 
                 <div class="meta-col">
-                  <div class="meta-label">CHAPTER</div>
+                  <div class="meta-label">Chapter</div>
                   <div class="meta-value" id="dashChapter">Loading…</div>
                 </div>
 
                 <div class="meta-col">
-                  <div class="meta-label">TEAM</div>
+                  <div class="meta-label">Team</div>
                   <div class="team-avatars-row" id="dashTeamAvatars">
                     <!-- Dynamically populated Google Profile Pictures -->
                   </div>
@@ -206,7 +206,7 @@
                     <div class="nextup-item">
                       <div class="nextup-info">
                         <div class="nextup-title">{{ meeting.title }}</div>
-                        <div class="nextup-meta">Meeting · <time datetime="{{ meeting.starts_at|date:'c' }}">{{ meeting.starts_at|date:'M j, g:i A T' }}</time></div>
+                        <div class="nextup-meta">Meeting · <time data-meeting-time="short" datetime="{{ meeting.starts_at|date:'c' }}">{{ meeting.starts_at|timezone:meeting_timezone|date:'M j, g:i A T' }}</time></div>
                       </div>
                     </div>
                   {% endfor %}
@@ -364,10 +364,7 @@
               <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading team deliverables...</div>
             </div>
 
-            <form class="add-task-form" id="teamTaskForm">
-              <input type="text" id="inputTeamTaskTitle" placeholder="Add a team task..." maxlength="300" required />
-              <button class="btn btn-primary" type="submit">Add</button>
-            </form>
+            {% include 'task-create-form.html' with scope='team' title_label='Team task title' placeholder='Add a team task…' only %}
           </div>
 
           <!-- SECTION 2: YOUR TASKS -->
@@ -384,10 +381,7 @@
               <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading personal tasks...</div>
             </div>
 
-            <form class="add-task-form" id="personalTaskForm">
-              <input type="text" id="inputPersonalTaskTitle" placeholder="Add a personal task..." maxlength="300" required />
-              <button class="btn btn-primary" type="submit">Add</button>
-            </form>
+            {% include 'task-create-form.html' with scope='personal' title_label='Personal task title' placeholder='Add a personal task…' only %}
           </div>
         </div>
       </section>
@@ -416,9 +410,9 @@
               <div class="nextup-info">
                 <h3 class="nextup-title">{{ meeting.title }}</h3>
                 <p class="nextup-meta">
-                  <time datetime="{{ meeting.starts_at|date:'c' }}">{{ meeting.starts_at|date:'D, M j, g:i A T' }}</time>
+                  <time data-meeting-time datetime="{{ meeting.starts_at|date:'c' }}">{{ meeting.starts_at|timezone:meeting_timezone|date:'D, M j, g:i A T' }}</time>
                   to
-                  <time datetime="{{ meeting.ends_at|date:'c' }}">{{ meeting.ends_at|date:'D, M j, g:i A T' }}</time>
+                  <time data-meeting-time datetime="{{ meeting.ends_at|date:'c' }}">{{ meeting.ends_at|timezone:meeting_timezone|date:'D, M j, g:i A T' }}</time>
                 </p>
               </div>
               <div class="confirmed-meeting-actions">
@@ -476,13 +470,9 @@
           <div class="tz-selector-wrap">
             <label for="tzSelect" class="tz-label">Your Time Zone:</label>
             <select id="tzSelect" class="tz-select">
-              <option value="America/Monterrey" selected>America/Monterrey (CT)</option>
-              <option value="America/New_York">America/New_York (ET)</option>
-              <option value="America/Los_Angeles">America/Los_Angeles (PT)</option>
-              <option value="Europe/London">Europe/London (GMT)</option>
-              <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
-              <option value="UTC">UTC (Coordinated Universal Time)</option>
+              {% include 'meeting-timezone-options.html' %}
             </select>
+            <span id="meetingTimezoneStatus" class="preference-save-status" role="status"></span>
           </div>
 
           <div class="availability-legend">
@@ -598,6 +588,19 @@
     </div>
   </main>
 
+  <dialog class="card task-deadline-dialog" id="taskDeadlineDialog" aria-labelledby="taskDeadlineHeading">
+    <form id="taskDeadlineForm">
+      <h2 id="taskDeadlineHeading">Edit deadline</h2>
+      <p class="task-deadline-title" id="taskDeadlineTitle"></p>
+      {% include 'task-deadline-fields.html' %}
+      <p class="form-feedback" role="alert"></p>
+      <div class="task-deadline-actions">
+        <button type="button" class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save deadline</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- DASHBOARD PERSONALIZATION -->
   <div class="modal-overlay" id="dashboardPreferencesModal" aria-hidden="true">
     <section class="modal-box preferences-modal" role="dialog" aria-modal="true" aria-labelledby="preferencesTitle">
@@ -605,7 +608,6 @@
         <div>
           <div class="eyebrow">YOUR WORKSPACE</div>
           <h3 id="preferencesTitle">Personalize your dashboard</h3>
-          <p class="modal-subtext">Choose an accent color. Your choice is saved to your fellow profile.</p>
         </div>
         <button class="btn-icon" type="button" id="closeDashboardPreferences" aria-label="Close preferences">&times;</button>
       </div>
@@ -621,6 +623,13 @@
           <button class="accent-choice" type="button" data-accent-choice="amber" aria-pressed="false"><span class="accent-swatch swatch-amber"></span><span>Amber</span></button>
         </div>
         <p class="preference-save-status" id="accentSaveStatus" role="status" aria-live="polite">Changes apply across your dashboard.</p>
+        <div class="timezone-preference">
+          <label for="settingsTimezone" class="tz-label">Meeting time zone</label>
+          <select class="tz-select" id="settingsTimezone">
+            {% include 'meeting-timezone-options.html' %}
+          </select>
+          <p class="preference-save-status" id="settingsTimezoneStatus" role="status">Used for confirmed meetings and availability.</p>
+        </div>
       </div>
     </section>
   </div>
@@ -688,7 +697,7 @@
     </div>
   </div>
 
-  <script src="{% static 'dashboard-utils.js' %}?v=20261029-notice-dismiss-v2"></script>
-  <script src="{% static 'dashboard.js' %}?v=20261121-cohort-schedule"></script>
+  <script src="{% static 'dashboard-utils.js' %}?v=20261121-deadline-preferences"></script>
+  <script src="{% static 'dashboard.js' %}?v=20261121-deadline-preferences"></script>
 </body>
 </html>

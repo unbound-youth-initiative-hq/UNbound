@@ -11,6 +11,7 @@
   --accent-dk:    #0090b3;
   --accent-light: #90E0EF;
   --accent-soft:  rgba(0,180,216,0.10);
+  --accent-rgb:   0, 180, 216;
   --navy:         #003249;
   --navy-deep:    #002034;
   --border:       #e2ebf2;
@@ -18,8 +19,8 @@
   --green-soft:   #e4f6ec;
   --amber:        #e0a009;
   --amber-soft:   #fdf3da;
-  --display:      'Montserrat', system-ui, sans-serif;
-  --sans:         'Montserrat', system-ui, sans-serif;
+  --display:      'Geist', system-ui, sans-serif;
+  --sans:         'Geist', system-ui, sans-serif;
   --mono:         'IBM Plex Mono', ui-monospace, monospace;
   --sidebar-w:    268px;
   --radius:       16px;
@@ -102,8 +103,8 @@ img { display: block; max-width: 100%; }
 }
 .page-head .sub { margin-top: 6px; font-size: 14.5px; color: var(--ink-dim); }
 .eyebrow {
-  font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--accent-dk); font-weight: 600;
+  font-family: var(--sans); font-size: 12px; letter-spacing: .025em;
+  color: var(--accent-dk); font-weight: 650;
 }
 
 .card {
@@ -207,10 +208,10 @@ img { display: block; max-width: 100%; }
   box-shadow: 0 10px 30px rgba(0, 50, 73, 0.18);
 }
 
-.project-eyebrow { color: var(--accent-light) !important; font-size: 11px; }
+.project-eyebrow { color: var(--accent-light); }
 .project-title { font-family: var(--display); font-size: 28px; font-weight: 800; color: #ffffff; margin-top: 6px; margin-bottom: 24px; }
 .project-meta-row { display: flex; align-items: center; gap: 40px; flex-wrap: wrap; }
-.meta-label { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.65); text-transform: uppercase; }
+.meta-label { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.65); }
 .meta-value { font-size: 15px; font-weight: 700; color: #ffffff; margin-top: 6px; }
 .phase-pill { display: flex; align-items: center; gap: 6px; }
 
@@ -422,6 +423,23 @@ img { display: block; max-width: 100%; }
 .add-task-form input { flex: 1; padding: 14px 18px; border: 1px solid var(--border); border-radius: 12px; font: inherit; font-size: 14px; background: var(--panel); color: var(--ink); outline: none; transition: border-color 0.18s; }
 .add-task-form input:focus { border-color: var(--accent); }
 .add-task-form .btn { padding: 12px 28px; border-radius: 12px; font-size: 14px; font-weight: 700; }
+.add-task-form input { min-width: 0; }
+.task-deadline-options { margin-top: 10px; }
+.task-deadline-options summary { width: fit-content; color: var(--accent-dk); font-size: 13px; font-weight: 650; cursor: pointer; }
+.task-deadline-fields { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.task-deadline-fields label { flex: 1 1 140px; font-size: 13px; color: var(--ink-mid); font-weight: 600; }
+.task-deadline-fields .input-field { min-width: 0; margin: 5px 0 0; }
+.task-deadline-fields input:disabled { opacity: .6; }
+.task-deadline-edit { align-self: flex-start; margin-top: 4px; }
+.form-feedback { margin-top: 8px; color: #a52436; font-size: 13px; }
+.form-feedback:empty { display: none; }
+.task-deadline-dialog { width: min(420px, calc(100% - 32px)); margin: auto; color: var(--ink); }
+.task-deadline-dialog::backdrop { background: rgba(0, 32, 52, .32); }
+.task-deadline-title { margin-top: 4px; color: var(--ink-mid); overflow-wrap: anywhere; }
+.task-deadline-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.timezone-preference { display: grid; gap: 8px; margin-top: 20px; }
+.timezone-preference .tz-select { width: 100%; }
+#meetingTimezoneStatus:empty { display: none; }
 
 /* ---- MEETING HUB ---- */
 .meeting-top-actions { display: flex; align-items: center; gap: 12px; }
@@ -632,7 +650,7 @@ body {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
-.project-eyebrow { color: var(--accent-dk) !important; }
+.project-eyebrow { color: var(--accent-dk); }
 .project-title, .meta-value { color: var(--ink); }
 .meta-label { color: var(--ink-dim); }
 .team-avatar-circle { border-color: rgba(255, 255, 255, .95); }
@@ -793,6 +811,10 @@ body {
   background: linear-gradient(125deg, rgba(255, 255, 255, .7), rgba(198, 234, 248, .64) 58%, rgba(221, 244, 250, .68));
   border-color: rgba(255, 255, 255, .88);
   box-shadow: 0 16px 40px rgba(38, 104, 134, .11), inset 0 1px rgba(255, 255, 255, .94);
+}
+
+.project-banner-card {
+  background: linear-gradient(125deg, rgba(255, 255, 255, .82), rgba(var(--accent-rgb), .23) 62%, rgba(var(--accent-rgb), .15));
 }
 
 .event-item, .task-item, .nextup-item, .sdg-pill, .file-item, .proto-task-card {
