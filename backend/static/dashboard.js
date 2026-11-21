@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- Navigation / View Switcher ---------- */
   window.showView = function (name) {
-    if (!googleIntegrationsEnabled && ['drive', 'calendar'].includes(name)) name = 'overview';
+    if (!googleIntegrationsEnabled && name === 'calendar') name = 'overview';
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
     document.querySelectorAll('.sb-nav .nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
     const sb = document.getElementById('sidebar');
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (name === 'overview') {
       refreshWorkspace();
-    } else if (name === 'drive') {
+    } else if (name === 'drive' && googleIntegrationsEnabled) {
       loadPersonalFiles();
       loadSharedFiles();
     } else if (name === 'tasks') {

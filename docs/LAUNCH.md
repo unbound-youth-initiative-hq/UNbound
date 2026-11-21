@@ -1,10 +1,11 @@
 # Identity-only launch — November 6, 2026
 
-The launch build defaults to `GOOGLE_INTEGRATIONS_ENABLED=false`. It requests only `openid`, `email`, and `profile` during Google sign-in. Invitations and Google identity links still identify fellows, independently of the separate staff username/password sessions. No schema migration is required by this change.
+The launch build defaults to `GOOGLE_INTEGRATIONS_ENABLED=false`. It requests only `openid`, `email`, and `profile` during Google sign-in. Invitations and Google identity links still identify fellows, independently of the separate staff username/password sessions.
 
 ## What is available
 
 - Invitation enrollment and returning Google sign-in using personal Google accounts.
+- Coordinator-published links to Google Drive resources for each cohort. Apply migration `0013_cohort_drive_links` and run `python manage.py setup_staff_group` before deploying the updated dashboard.
 - Staff administration, cohorts, phase catalog, individual and shared-team assignments.
 - Manual When2Meet selection, submission and group availability, including linked assignment completion.
 - Badges, SDGs, dashboard progress and personalization.
@@ -46,7 +47,7 @@ Before inviting fellows, verify on Azure:
 - Staff login/logout and fellow login/logout remain independent, including in the same browser.
 - Staff can assign individual/team tasks and a meeting poll. Fellows can complete tasks and submit availability. Other cohorts cannot access them.
 - Completing a team task updates the shared completion. All-busy availability counts as submitted.
-- Drive/Calendar controls are absent and the browser makes no Google data API requests. Badges, progress, SDGs and colors load normally.
+- Open Google Drive in the dashboard. Check that links belong to the signed-in fellow’s cohort, open in Drive, and trigger no Google data API requests from UNbound. Check badges, progress, SDGs and colors.
 - Reminder previews remain console-only. Platform logs must not capture OAuth authorization query strings. App Service/Application Insights logging must be reviewed separately from Gunicorn.
 
 Local tests use synthetic SQLite data and mocked OAuth responses. They do not establish live Google consent, Azure startup, or PostgreSQL behavior. Those remain deployment acceptance checks.

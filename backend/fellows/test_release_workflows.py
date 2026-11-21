@@ -67,6 +67,30 @@ class ReleaseWorkflowTests(TestCase):
         self.assertNotIn('change_user', permissions)
         self.assertNotIn('change_permission', permissions)
 
+    def test_coordinator_publishes_drive_folder_from_the_cohort_form(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_staff_group', verbosity=0)
+        coordinator = get_user_model().objects.create_user('coordinator', password='test', is_staff=True)
+        coordinator.groups.add(Group.objects.get(name='UNbound coordinators'))
+        self.client.post('/admin/logout/')
+        self.client.post('/admin/login/', {'username': 'coordinator', 'password': 'test', 'next': '/admin/'})
+        url = reverse('admin:fellows_cohort_change', args=[self.cohort.pk])
+        self.assertContains(self.client.get(url), 'id_drive_links-TOTAL_FORMS')
+        link = 'https://drive.google.com/drive/folders/sample?resourcekey=sample'
+        form = {
+            'name': self.cohort.name, 'start_date': self.cohort.start_date.isoformat(),
+            'end_date': self.cohort.end_date.isoformat(), 'is_active': 'on',
+            'drive_links-TOTAL_FORMS': '1', 'drive_links-INITIAL_FORMS': '0',
+            'drive_links-0-title': 'Cohort folder', 'drive_links-0-url': link, '_save': 'Save',
+        }
+        self.assertEqual(self.client.post(url, form).status_code, 302)
+        self.assertContains(self.client.get('/dashboard/'), link)
+        resource = self.cohort.drive_links.get()
+        form.update({'drive_links-INITIAL_FORMS': '1', 'drive_links-0-id': resource.pk,
+                     'drive_links-0-DELETE': 'on'})
+        self.assertEqual(self.client.post(url, form).status_code, 302)
+        self.assertNotContains(self.client.get('/dashboard/'), link)
+
     def test_single_use_invitation_cannot_be_claimed_twice(self):
         from django.core.exceptions import ValidationError
         code = InviteCode.objects.create()

@@ -6,11 +6,12 @@ from urllib.parse import parse_qs, urlsplit
 from allauth.socialaccount.models import SocialAccount, SocialToken
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from .google_api import GoogleIntegrationDisabled, get_google_credentials, has_google_connection
-from .models import AvailabilityRequest, Cohort, Fellow, GoogleTaskLink, Task
+from .models import AvailabilityRequest, Cohort, CohortDriveLink, Fellow, GoogleTaskLink, Task
 
 
 @override_settings(GOOGLE_INTEGRATIONS_ENABLED=False, SOCIALACCOUNT_STORE_TOKENS=False)
@@ -46,12 +47,38 @@ class IdentityOnlyLaunchTests(TestCase):
         self.assertTrue(self.client.get('/api/google/account/').json()['connected'])
         page = self.client.get('/dashboard/')
         self.assertContains(page, 'data-google-integrations-enabled="false"')
-        for text in ('Meeting Hub', 'id="btnSubmitAvailability"', 'id="view-tasks"', 'id="view-badges"'):
+        for text in ('Meeting Hub', 'id="btnSubmitAvailability"', 'id="view-tasks"', 'id="view-badges"',
+                     'id="view-drive"', 'data-view="drive"', 'hasn’t posted any links'):
             self.assertContains(page, text)
-        for text in ('id="view-drive"', 'id="folderModal"', 'id="dashNextUpList"',
+        for text in ('id="personalFileList"', 'id="folderModal"', 'id="dashNextUpList"',
                      'id="calendarEvents"', 'id="btnSyncGoogleCalendar"',
                      'Yellow outline means', 'Connect Google to this account'):
             self.assertNotContains(page, text)
+
+    def test_drive_resources_follow_the_signed_in_fellows_cohort(self):
+        other = Cohort.objects.create(name='Other', start_date=self.cohort.start_date, end_date=self.cohort.end_date)
+        folder = self.cohort.drive_links.create(title='Team <folder>', url='https://drive.google.com/drive/folders/demo?resourcekey=key')
+        document = other.drive_links.create(title='Other agenda', url='https://docs.google.com/document/d/other/edit')
+        page = self.client.get('/dashboard/', {'cohort': other.pk})
+        self.assertContains(page, folder.url)
+        self.assertContains(page, 'Team &lt;folder&gt;')
+        self.assertNotContains(page, document.url)
+        self.fellow.cohort = None
+        self.fellow.save(update_fields=['cohort'])
+        page = self.client.get('/dashboard/')
+        self.assertNotContains(page, folder.url)
+        self.assertNotContains(page, document.url)
+
+    def test_drive_links_accept_only_https_google_drive_and_docs_hosts(self):
+        link = CohortDriveLink(cohort=self.cohort, title='Workbook')
+        for url in ('https://drive.google.com/open?id=abc', 'https://docs.google.com/spreadsheets/d/abc/edit'):
+            link.url = url
+            link.full_clean()
+        for url in ('http://drive.google.com/open?id=abc', 'https://drive.google.com.example.org/file',
+                    'https://docs.google.com@example.org/file', 'javascript:alert(1)'):
+            with self.subTest(url=url), self.assertRaises(ValidationError):
+                link.url = url
+                link.full_clean()
 
     @override_settings(GOOGLE_INTEGRATIONS_ENABLED=True)
     def test_deferred_ui_remains_available_when_explicitly_enabled(self):
