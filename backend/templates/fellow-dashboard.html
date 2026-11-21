@@ -4,15 +4,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  {% include 'favicon.html' %}
   <meta charset="UTF-8" />
   <meta name="csrf-token" content="{{ csrf_token }}" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Fellow Dashboard - UNbound</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400..800&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261121-deadline-preferences" />
+  <link rel="stylesheet" href="{% static 'badge-art.css' %}" />
+  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261121-meeting-updates" />
 </head>
 <body data-google-integrations-enabled="{{ google_integrations_enabled|yesno:'true,false' }}" data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}" data-accent="{{ accent_palette|default:'ocean' }}">
   <aside class="sidebar" id="sidebar">
@@ -83,12 +85,9 @@
             <div class="eyebrow">Fellow dashboard</div>
             <h1 class="welcome-title">Welcome back, <span id="dashFirstName">Fellow</span> 👋</h1>
             <div class="dash-sub-line">
-              <span id="dashCohortName">Loading cohort…</span> · Phase: <strong id="dashCurrentPhase">Loading…</strong>
+              <span id="dashCohortName">Loading cohort…</span> · <strong id="dashCurrentPhase">Loading…</strong>
             </div>
           </div>
-          <button class="btn btn-primary btn-view-tasks" type="button" onclick="showView('tasks')">
-            <i class="fa-solid fa-plus"></i> View Tasks
-          </button>
         </div>
 
         <p id="dashboardLoadStatus" role="alert" class="error-state"></p>
@@ -364,7 +363,7 @@
               <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading team deliverables...</div>
             </div>
 
-            {% include 'task-create-form.html' with scope='team' title_label='Team task title' placeholder='Add a team task…' only %}
+            {% include 'task-create-form.html' with scope='team' title_label='Team task title' placeholder='Add a team task…' task_icons=task_icons only %}
           </div>
 
           <!-- SECTION 2: YOUR TASKS -->
@@ -381,7 +380,7 @@
               <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading personal tasks...</div>
             </div>
 
-            {% include 'task-create-form.html' with scope='personal' title_label='Personal task title' placeholder='Add a personal task…' only %}
+            {% include 'task-create-form.html' with scope='personal' title_label='Personal task title' placeholder='Add a personal task…' task_icons=task_icons only %}
           </div>
         </div>
       </section>
@@ -392,7 +391,7 @@
           <div>
             <div class="eyebrow">SCHEDULING</div>
             <h1>Meeting Hub</h1>
-            <div class="sub">See confirmed meetings and respond to availability polls.</div>
+            <div class="sub">See confirmed meetings and respond to WhenBound availability polls.</div>
           </div>
           {% if google_integrations_enabled %}
           <div class="meeting-top-actions">
@@ -427,7 +426,7 @@
           {% endfor %}
         </section>
 
-        <!-- Active When to Meet Request Banner & Selector -->
+        <!-- Active WhenBound Request Banner & Selector -->
         <div class="card w2m-request-card" id="w2mRequestBanner" style="display: none; margin-bottom: 20px;">
           <div class="w2m-card-inner">
             <div class="w2m-card-left">
@@ -435,7 +434,7 @@
                 <span class="source-badge"><i class="fa-solid fa-globe"></i> ASSIGNED BY UNBOUND</span>
                 <span class="w2m-status-pill" id="w2mStatusPill">Pending</span>
               </div>
-              <h2 class="w2m-request-title" id="w2mRequestTitle">Availability Request</h2>
+              <h2 class="w2m-request-title" id="w2mRequestTitle">WhenBound request</h2>
               <p class="w2m-request-desc" id="w2mRequestDesc"></p>
               <div class="w2m-meta-row">
                 <span><i class="fa-regular fa-calendar"></i> <strong id="w2mDateRange">Oct 12 – Oct 16</strong></span>
@@ -452,12 +451,12 @@
           </div>
         </div>
 
-        <!-- Empty State when no When to Meet request is assigned -->
+        <!-- Empty State when no WhenBound request is assigned -->
         <div class="card w2m-empty-state" id="w2mEmptyState" style="display: none; margin-bottom: 24px; text-align: center; padding: 40px 24px;">
           <div class="w2m-empty-icon" style="font-size: 36px; color: var(--accent); margin-bottom: 12px;">
             <i class="fa-solid fa-calendar-check"></i>
           </div>
-          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">No Active When to Meet Requests</h3>
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">No Active WhenBound Requests</h3>
           <p style="font-size: 14px; color: var(--ink-dim); max-width: 520px; margin: 0 auto 16px;">
             When UNbound coordinators assign an availability survey for an upcoming cohort session, pitch review, or mentorship sync, it will appear here and in your Tasks.
           </p>
@@ -573,7 +572,7 @@
           </div>
           <div class="banner-info">
             <h2 id="bannerLevelTitle">Pioneer • Level 1</h2>
-            <p id="bannerLevelSub">Complete tasks and sync availability to unlock badges and earn XP.</p>
+            <p id="bannerLevelSub">Coordinators award badges for fellowship milestones.</p>
             <div class="banner-progress-track">
               <div class="banner-progress-fill" id="bannerProgressFill" style="width: 0%;"></div>
             </div>
@@ -590,13 +589,14 @@
 
   <dialog class="card task-deadline-dialog" id="taskDeadlineDialog" aria-labelledby="taskDeadlineHeading">
     <form id="taskDeadlineForm">
-      <h2 id="taskDeadlineHeading">Edit deadline</h2>
+      <h2 id="taskDeadlineHeading">Edit task details</h2>
       <p class="task-deadline-title" id="taskDeadlineTitle"></p>
       {% include 'task-deadline-fields.html' %}
+      {% include 'task-appearance-fields.html' %}
       <p class="form-feedback" role="alert"></p>
       <div class="task-deadline-actions">
         <button type="button" class="btn btn-ghost">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save deadline</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
       </div>
     </form>
   </dialog>
@@ -697,7 +697,7 @@
     </div>
   </div>
 
-  <script src="{% static 'dashboard-utils.js' %}?v=20261121-deadline-preferences"></script>
-  <script src="{% static 'dashboard.js' %}?v=20261121-deadline-preferences"></script>
+  <script src="{% static 'dashboard-utils.js' %}?v=20261121-meeting-updates"></script>
+  <script src="{% static 'dashboard.js' %}?v=20261121-meeting-updates"></script>
 </body>
 </html>

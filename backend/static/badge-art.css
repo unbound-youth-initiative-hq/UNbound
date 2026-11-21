@@ -1,0 +1,27 @@
+/* The original fellowship artwork is one transparent sheet. Each mask selects one illustration. */
+.badge-art {
+  display: inline-block;
+  width: var(--art-width);
+  aspect-ratio: var(--art-ratio);
+  background-color: currentColor;
+  mask: url("badge-icons.png") var(--art-position) / var(--art-size) no-repeat;
+}
+.admin-badge-preview { display: inline-grid; width: 48px; height: 48px; place-items: center; vertical-align: middle; }
+.badge-card.unearned .badge-art { color: #536b7b; }
+.badge-icon-circle img { width: 72%; height: 72%; object-fit: contain; }
+
+.badge-art-launchpad { --art-width: 68.08%; --art-ratio: 591/625; --art-position: 0.17782% 20.44127%; --art-size: 861.2521% 346.5600%; }
+.badge-art-flame { --art-width: 72.00%; --art-ratio: 628/628; --art-position: 18.71358% 23.79714%; --art-size: 810.5096% 344.9045%; }
+.badge-art-blueprint { --art-width: 65.35%; --art-ratio: 570/628; --art-position: 38.87168% 23.79714%; --art-size: 892.9825% 344.9045%; }
+.badge-art-comet { --art-width: 72.00%; --art-ratio: 616/581; --art-position: 0.00000% 79.43218%; --art-size: 826.2987% 372.8055%; }
+.badge-art-equipment { --art-width: 72.00%; --art-ratio: 628/628; --art-position: 18.80323% 83.94018%; --art-size: 810.5096% 344.9045%; }
+.badge-art-rocket { --art-width: 71.77%; --art-ratio: 626/628; --art-position: 38.75448% 83.94018%; --art-size: 813.0990% 344.9045%; }
+.badge-art-galaxy { --art-width: 72.00%; --art-ratio: 726/628; --art-position: 61.84693% 0.39012%; --art-size: 701.1019% 344.9045%; }
+.badge-art-stars { --art-width: 69.46%; --art-ratio: 628/651; --art-position: 79.33662% 0.19802%; --art-size: 810.5096% 332.7189%; }
+.badge-art-planet { --art-width: 72.00%; --art-ratio: 715/656; --art-position: 98.35429% 0.00000%; --art-size: 711.8881% 330.1829%; }
+.badge-art-infinity { --art-width: 72.00%; --art-ratio: 628/628; --art-position: 61.31779% 49.73992%; --art-size: 810.5096% 344.9045%; }
+.badge-art-checklist { --art-width: 72.00%; --art-ratio: 712/664; --art-position: 78.59753% 51.66445%; --art-size: 714.8876% 326.2048%; }
+.badge-art-yoda { --art-width: 72.00%; --art-ratio: 860/628; --art-position: 100.00000% 49.73992%; --art-size: 591.8605% 344.9045%; }
+.badge-art-gauge { --art-width: 72.00%; --art-ratio: 625/625; --art-position: 61.59015% 97.33939%; --art-size: 814.4000% 346.5600%; }
+.badge-art-solar-system { --art-width: 71.66%; --art-ratio: 628/631; --art-position: 79.33662% 97.26384%; --art-size: 810.5096% 343.2647%; }
+.badge-art-satellite { --art-width: 72.00%; --art-ratio: 648/637; --art-position: 98.17650% 100.00000%; --art-size: 785.4938% 340.0314%; }

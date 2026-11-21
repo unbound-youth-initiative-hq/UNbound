@@ -27,6 +27,54 @@ class ReleaseWorkflowTests(TestCase):
         self.assertNotContains(response, 'google_refresh_token')
         self.assertEqual(self.client.get('/admin/fellows/task/add/').status_code, 302)
 
+    def test_selected_email_draft_uses_only_verified_google_recipients(self):
+        from allauth.socialaccount.models import SocialAccount
+        from django.core import mail
+        def google_fellow(name, *, verified=True, active=True):
+            user = get_user_model().objects.create_user(name, email=f'{name}@local.example', is_active=active)
+            SocialAccount.objects.create(user=user, uid=name, provider='google', extra_data={
+                'email': f'{name}@google.example', 'email_verified': verified,
+            })
+            return Fellow.objects.create(user=user, cohort=self.cohort)
+        included = google_fellow('included')
+        unverified = google_fellow('unverified', verified=False)
+        inactive = google_fellow('inactive', active=False)
+        google_fellow('other')
+        response = self.client.post(reverse('admin:fellows_fellow_changelist'), {
+            'action': 'email_selected_fellows', '_selected_action': [included.pk, unverified.pk, inactive.pk],
+        })
+        self.assertEqual(response.context['recipients'], ['included@google.example'])
+        self.assertEqual(response.context['skipped'], 2)
+        self.assertContains(response, 'mailto:?bcc=included%40google.example')
+        self.assertNotContains(response, 'other@google.example')
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_badge_admin_upload_and_remove_uses_database(self):
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import Badge
+        badge = Badge.objects.get(slug='charting-the-stars')
+        admin_url = reverse('admin:fellows_badge_change', args=[badge.pk])
+        image_url = reverse('badge-icon', args=[badge.pk])
+        payload = {'name': badge.name, 'slug': badge.slug, 'description': badge.description,
+                   'artwork': 'stars', 'order': 3, 'color': '#123456', 'icon_class': 'fa-star',
+                   'trigger_type': 'manual', 'required_task_count': 0, 'xp_reward': 100, '_save': 'Save'}
+        bad = SimpleUploadedFile('broken.png', b'not a png')
+        self.assertContains(self.client.post(admin_url, {**payload, 'custom_icon': bad}), 'Choose a readable')
+        image = BytesIO()
+        Image.new('RGBA', (400, 200), 'blue').save(image, 'PNG')
+        up = SimpleUploadedFile('star.png', image.getvalue(), content_type='image/png')
+        self.assertEqual(self.client.post(admin_url, {**payload, 'custom_icon': up}).status_code, 302)
+        result = self.client.get(image_url)
+        self.assertEqual(result['Content-Type'], 'image/png')
+        self.assertEqual(Image.open(BytesIO(result.content)).size, (192, 96))
+        record = next(b for b in self.client.get('/api/badges/').json()['badges'] if b['id'] == badge.pk)
+        self.assertTrue(record['has_custom_icon'])
+        self.assertEqual(record['artwork'], 'stars')
+        self.assertEqual(self.client.post(admin_url, {**payload, 'remove_custom_icon': 'on'}).status_code, 302)
+        self.assertEqual(self.client.get(image_url).status_code, 404)
+
     def test_overview_creates_no_assignments_and_preserves_empty_sdgs(self):
         response = self.client.get('/api/dashboard/overview/')
         self.assertEqual(response.status_code, 200)

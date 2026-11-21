@@ -27,7 +27,23 @@ After a database backup, run migrations as one release step, then `collectstatic
 
 When enabling real email, schedule `python manage.py send_pending_reminders` as a recurring worker job (one process per run). The Admin action queues deliveries; it does not send SMTP inside the web request. Console previews are processed immediately. Review failed/uncertain deliveries before any manual requeue.
 
-WhiteNoise serves collected static assets. User-uploaded badge images are not yet supported by this build; add persistent storage before enabling them. Retain database backups, restrict its network access, and establish monitoring/cost alerts in the actual subscription. Gunicorn access logs omit query strings and referrers to avoid logging OAuth codes. Check Azure platform logs and Application Insights separately for query-string capture before using real accounts.
+WhiteNoise serves collected static assets. Coordinator-uploaded badge icons are resized and stored in PostgreSQL. The bundled badge sheet and favicons ship with the static files. Retain database backups, restrict its network access, and establish monitoring/cost alerts in the actual subscription. Gunicorn access logs omit query strings and referrers to avoid logging OAuth codes. Check Azure platform logs and Application Insights separately for query-string capture before using real accounts.
+
+## Favicon on Render
+
+1. The portal already includes the UNbound favicon. To replace it, commit square PNGs with the same names at `backend/static/favicon-light.png` and `backend/static/favicon-dark.png`. The dark version is used when the browser prefers dark mode.
+2. Merge the changes into `basic-launch`. The Render web service uses `backend/` as its root. Keep `python manage.py collectstatic --noinput` and `python manage.py migrate --noinput` in the existing build command.
+3. If auto-deploy is off, open **UNbound → Manual Deploy → Deploy latest commit** in Render. After the service reports **Live**, open `/favicon.ico` on the service URL to check the image. A private tab can help if the browser still shows its cached tab icon. [Render deployment controls](https://render.com/docs/deploys)
+
+## Fellowship catalog update
+
+Migration `0017_fellowship_catalog` replaces the demo badges with the 12 coordinator-awarded milestones and resets earned badges and XP. Restoring the old awards requires a pre-deployment database backup. It migrates cohort assignments to Launchpad (Orbit of Ideas), Lift-off (Launch Sequence and Mission Build), or Orbit (Trajectory, Touchdown and Graduation). Custom phase names stay available.
+
+In **Admin → Badges**, choose a badge and select its artwork, or upload a PNG, JPEG or WebP. An uploaded icon takes priority. In **Admin → Fellows**, open a fellow and mark the appropriate badge **Earned**.
+
+## Email selected fellows
+
+In **Admin → Fellows**, select the recipients, choose **Email selected fellows (BCC draft)** and click **Go**. Review the addresses and click **Open BCC draft**. Write and send the message from your mail app. If you use webmail, you can also copy the addresses into its BCC field. This uses the verified addresses from the selected active fellows’ Google sign-ins and works with the existing identity-only configuration.
 
 ## Data preservation
 

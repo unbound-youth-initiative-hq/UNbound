@@ -87,7 +87,7 @@ class AvailabilityIntegrityTests(TestCase):
         self.meeting.deadline = date(2026, 10, 31)
         self.meeting.save()
         task = self.meeting.tasks.get(assigned_to=self.fellow)
-        self.assertEqual(task.title, 'When2meet: Updated session')
+        self.assertEqual(task.title, 'WhenBound: Updated session')
         self.assertEqual(task.due_date, self.meeting.deadline)
         self.assertEqual(task.status, Task.Status.COMPLETE)
         self.assertTrue(self.meeting.submissions.exists())

@@ -43,6 +43,40 @@ class BrowserFormTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.browser.get(url).json()['meeting_timezone'], 'Asia/Tokyo')
 
+    def test_dashboard_and_whenbound_support_fractional_offsets_and_date_changes(self):
+        from datetime import date
+        from .models import AvailabilityRequest
+        self.browser.force_login(self.student)
+        page = self.browser.get('/dashboard/')
+        self.assertContains(page, 'value="Asia/Kathmandu"', count=2)
+        self.assertContains(page, 'value="Pacific/Chatham"', count=2)
+        self.assertContains(page, 'value="fa-lightbulb"', count=3)
+        self.assertContains(page, 'family=Montserrat')
+        self.assertNotContains(page, 'View Tasks')
+        self.assertContains(page, 'favicon-dark.png')
+        Fellow.objects.filter(user=self.student).update(meeting_timezone='Asia/Kathmandu')
+        AvailabilityRequest.objects.create(title='Late meeting', assign_to_all=True,
+                                          start_date=date(2026, 12, 1), end_date=date(2026, 12, 1),
+                                          start_hour=13, end_hour=15)
+        day = self.browser.get('/api/meetings/requests/').json()['requests'][0]['display_days'][0]
+        self.assertEqual(day['date'], '2026-12-01')
+        self.assertEqual(day['dayNum'], 2)
+        self.assertEqual(day['hours'], ['12:45 AM', '1:45 AM'])
+
+    def test_whenbound_keeps_both_hours_during_daylight_saving_fallback(self):
+        from datetime import date
+        from .meeting_timezones import localized_poll_days
+        from .models import AvailabilityRequest
+        poll = AvailabilityRequest(start_date=date(2026, 10, 31), end_date=date(2026, 10, 31),
+                                   start_hour=23, end_hour=24)
+        first = localized_poll_days(poll, 'America/New_York')[0]
+        poll.start_date = poll.end_date = date(2026, 11, 1)
+        poll.start_hour, poll.end_hour = 0, 1
+        second = localized_poll_days(poll, 'America/New_York')[0]
+        self.assertEqual(first['dayNum'], second['dayNum'])
+        self.assertEqual(first['hours'], ['1:00 AM -0400'])
+        self.assertEqual(second['hours'], ['1:00 AM -0500'])
+
     def test_actual_admin_logout_returns_to_admin_and_keeps_portal_login(self):
         self.browser.force_login(self.student)
         self.browser.get('/dashboard/')

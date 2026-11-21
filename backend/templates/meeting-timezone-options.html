@@ -1,3 +1,5 @@
-{% for value, label in meeting_timezones %}
-  <option value="{{ value }}"{% if value == meeting_timezone %} selected{% endif %}>{{ label }}</option>
+{% for region, zones in meeting_timezones %}
+  <optgroup label="{{ region }}">
+    {% for value, label in zones %}<option value="{{ value }}"{% if value == meeting_timezone %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </optgroup>
 {% endfor %}

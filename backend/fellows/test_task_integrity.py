@@ -139,6 +139,17 @@ class TaskIntegrityTests(TestCase):
         self.assertEqual(self.client.patch(self.url(task), {'status': 'complete'}, format='json').status_code, 400)
         self.assertFalse(self.client.get(self.url(task)).data['can_change_status'])
 
+    def test_task_creator_selects_and_updates_appearance(self):
+        response = self.client.post('/api/tasks/', {'title': 'Sketch', 'scope': 'team',
+                                    'icon': 'fa-palette', 'color': '#61388a'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        url = f"/api/tasks/{response.data['id']}/"
+        self.assertEqual(self.client.patch(url, {'icon': 'fa-invented'}, format='json').status_code, 400)
+        self.assertEqual(self.client.patch(url, {'icon': 'fa-star', 'color': '#ffeedd'}, format='json').status_code, 200)
+        self.client.force_authenticate(self.peer.user)
+        self.assertEqual(self.client.get(url).data['icon'], 'fa-star')
+        self.assertEqual(self.client.patch(url, {'color': '#ffffff'}, format='json').status_code, 403)
+
     def test_unsafe_style_and_icon_tokens_are_rejected(self):
         for payload in ({'color': 'red;position:fixed'}, {'icon': 'fa-check" onmouseover="bad'}):
             response = self.client.post('/api/tasks/', {'title': 'Test', **payload}, format='json')

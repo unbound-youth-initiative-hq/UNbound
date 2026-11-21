@@ -205,10 +205,7 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey', request_id
     if not fellow:
         raise GoogleIntegrationError('Fellow profile not found.')
 
-    try:
-        tz = ZoneInfo(tz_str)
-    except Exception:
-        tz = ZoneInfo('America/Monterrey')
+    tz = ZoneInfo(settings.TIME_ZONE)
 
     from .availability import request_for_fellow, submit_availability
     avail_request = request_for_fellow(fellow, request_id)
