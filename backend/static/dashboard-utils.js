@@ -70,7 +70,8 @@
           ${task.source === 'unbound' ? '<div class="source-badge"><i class="fa-solid fa-globe"></i> ASSIGNED BY UNBOUND</div>' : ''}
           <div class="proto-task-title">${escapeHtml(task.title)}</div>
           ${task.description ? `<div class="proto-task-desc">${escapeHtml(task.description)}</div>` : ''}
-          ${task.due_date ? `<div class="proto-task-desc">Due ${escapeHtml(task.due_date)}</div>` : ''}
+          ${task.due_date ? `<div class="proto-task-desc">Due ${escapeHtml(task.due_date)}${task.due_time ? ` · ${formatTaskTime(task.due_time)}` : ''}</div>` : ''}
+          ${task.can_edit === true ? `<button class="btn btn-ghost btn-sm task-deadline-edit" type="button" data-task-deadline-id="${id}" data-task-title="${escapeHtml(task.title)}" data-due-date="${escapeHtml(task.due_date || '')}" data-due-time="${escapeHtml(task.due_time || '')}">Edit deadline</button>` : ''}
           ${requestId ? `<button class="btn btn-ghost btn-open-w2m-task" type="button" onclick="openWhenToMeet(${requestId})"><i class="fa-solid fa-calendar-check"></i> Open When to Meet</button>` : ''}
         </div>
         <div class="proto-task-actions">
@@ -94,5 +95,12 @@
     </div>`).join('');
   }
 
-  return { escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup };
+  function formatTaskTime(value) {
+    const time = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?$/.exec(value || '');
+    if (!time) return '';
+    const hour = Number(time[1]);
+    return `${hour % 12 || 12}:${time[2]} ${hour < 12 ? 'AM' : 'PM'} Monterrey time`;
+  }
+
+  return { escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime };
 }));

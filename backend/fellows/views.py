@@ -126,6 +126,8 @@ def dashboard_view(request, drive=False):
         'fellow_id': fellow.pk,
         'confirmed_meetings': confirmed_meetings_for(fellow).filter(ends_at__gt=timezone.now()),
         'accent_palette': fellow.accent_palette,
+        'meeting_timezone': fellow.meeting_timezone,
+        'meeting_timezones': Fellow.MeetingTimezone.choices,
     })
 
 
@@ -570,11 +572,17 @@ class TaskViewSet(viewsets.ModelViewSet):
             if has_google_connection(user):
                 sync_task_to_google(user, task)
 
-    def perform_update(self, serializer):
+    def update(self, request, *args, **kwargs):
         with transaction.atomic():
+            tasks = self.filter_queryset(self.get_queryset()).select_for_update(of=('self',))
+            task = get_object_or_404(tasks, pk=kwargs['pk'])
+            self.check_object_permissions(request, task)
+            serializer = self.get_serializer(task, data=request.data, partial=kwargs.get('partial', False))
+            serializer.is_valid(raise_exception=True)
             task = serializer.save()
             self._refresh_task_progress(task)
         self._sync_google_mirrors(task)
+        return Response(serializer.data)
 
     def perform_destroy(self, instance):
         if not instance.can_manage(self.request.user):
@@ -951,23 +959,33 @@ class DashboardPreferencesAPIView(APIView):
         fellow = getattr(request.user, 'fellow_profile', None)
         if fellow is None:
             return Response({'status': 'error', 'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({'status': 'success', 'accent_palette': fellow.accent_palette})
+        return Response({
+            'status': 'success', 'accent_palette': fellow.accent_palette, 'meeting_timezone': fellow.meeting_timezone,
+        })
 
     def patch(self, request, *args, **kwargs):
         fellow = getattr(request.user, 'fellow_profile', None)
         if fellow is None:
             return Response({'status': 'error', 'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        palette = request.data.get('accent_palette')
-        if palette not in Fellow.AccentPalette.values:
-            return Response(
-                {'status': 'error', 'detail': 'Choose one of the available accent palettes.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        fellow.accent_palette = palette
-        fellow.save(update_fields=['accent_palette'])
-        return Response({'status': 'success', 'accent_palette': fellow.accent_palette})
+        updates = {}
+        for field, choices, error in (
+            ('accent_palette', Fellow.AccentPalette.values, 'Choose one of the available accent palettes.'),
+            ('meeting_timezone', Fellow.MeetingTimezone.values, 'Choose one of the available meeting time zones.'),
+        ):
+            if field in request.data:
+                value = request.data[field]
+                if value not in choices:
+                    return Response({'status': 'error', 'detail': error}, status=status.HTTP_400_BAD_REQUEST)
+                updates[field] = value
+        if not updates:
+            return Response({'status': 'error', 'detail': 'Choose a preference to update.'}, status=status.HTTP_400_BAD_REQUEST)
+        for field, value in updates.items():
+            setattr(fellow, field, value)
+        fellow.save(update_fields=updates)
+        return Response({
+            'status': 'success', 'accent_palette': fellow.accent_palette, 'meeting_timezone': fellow.meeting_timezone,
+        })
 
 
 class DashboardOverviewAPIView(APIView):
@@ -1036,8 +1054,12 @@ class DashboardOverviewAPIView(APIView):
         open_tasks = unfinished.count()
         completed_tasks = tasks_qs.filter(status=Task.Status.COMPLETE).count()
         total_tasks = tasks_qs.count()
-        today = timezone.localdate()
-        deadlines = unfinished.order_by('due_date', 'pk').values('title', 'due_date')
+        now = timezone.localtime()
+        today = now.date()
+        is_overdue = Q(due_date__lt=today) | Q(due_date=today, due_time__lte=now.time())
+        deadlines = unfinished.filter(due_date__isnull=False).order_by(
+            'due_date', F('due_time').asc(nulls_last=True), 'pk',
+        ).values('title', 'due_date', 'due_time')
 
         completion_pct = round((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 0
 
@@ -1067,8 +1089,8 @@ class DashboardOverviewAPIView(APIView):
             'team_members': team_members,
             'deadlines': {
                 'today': today,
-                'overdue': list(deadlines.filter(due_date__lt=today)[:3]),
-                'upcoming': list(deadlines.filter(due_date__gte=today)[:3]),
+                'overdue': list(deadlines.filter(is_overdue)[:3]),
+                'upcoming': list(deadlines.exclude(is_overdue)[:3]),
             },
             'stats': {
                 'open_tasks': open_tasks,

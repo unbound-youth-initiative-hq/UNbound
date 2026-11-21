@@ -29,6 +29,20 @@ class BrowserFormTests(TestCase):
         self.assertEqual(Fellow.objects.get(user=self.student).accent_palette, 'mint')
         self.assertEqual(self.browser.get('/admin/').status_code, 200)
 
+    def test_meeting_timezone_is_saved_for_both_dashboard_controls(self):
+        self.browser.force_login(self.student)
+        page = self.browser.get('/dashboard/')
+        token = re.search(r'name="csrf-token" content="([a-zA-Z0-9]+)"', page.content.decode())[1]
+        url = '/api/dashboard/preferences/'
+        response = self.browser.patch(url, {'meeting_timezone': 'Asia/Tokyo'}, content_type='application/json', HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['accent_palette'], 'ocean')
+        self.assertEqual(response.json()['meeting_timezone'], 'Asia/Tokyo')
+        self.assertContains(self.browser.get('/dashboard/'), '<option value="Asia/Tokyo" selected>Tokyo</option>', count=2)
+        response = self.browser.patch(url, {'meeting_timezone': 'Invalid/Zone'}, content_type='application/json', HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.browser.get(url).json()['meeting_timezone'], 'Asia/Tokyo')
+
     def test_actual_admin_logout_returns_to_admin_and_keeps_portal_login(self):
         self.browser.force_login(self.student)
         self.browser.get('/dashboard/')

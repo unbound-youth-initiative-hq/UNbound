@@ -1,6 +1,7 @@
 """Regression coverage for task audiences, shared completion, and Google ownership."""
-from datetime import date
+from datetime import date, datetime, time
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -37,7 +38,7 @@ class TaskIntegrityTests(TestCase):
 
     def test_unbound_content_and_audience_are_protected(self):
         task = self.task()
-        for payload in ({'title': 'Edited'}, {'due_date': '2026-12-01'}, {'cohort': self.other.pk}, {'scope': 'team'}, {'source': 'self'}, {'assigned_to': self.peer.pk}):
+        for payload in ({'title': 'Edited'}, {'due_date': '2026-12-01'}, {'due_time': '14:30'}, {'cohort': self.other.pk}, {'scope': 'team'}, {'source': 'self'}, {'assigned_to': self.peer.pk}):
             with self.subTest(payload=payload):
                 self.assertEqual(self.client.patch(self.url(task), payload, format='json').status_code, 403)
         task.refresh_from_db()
@@ -88,6 +89,39 @@ class TaskIntegrityTests(TestCase):
     def test_task_list_does_not_create_prototype_assignments(self):
         self.assertEqual(self.client.get('/api/tasks/').status_code, 200)
         self.assertEqual(Task.objects.count(), 0)
+
+    def test_creator_can_add_edit_and_clear_a_date_and_time(self):
+        url = '/api/tasks/'
+        self.assertEqual(self.client.post(url, {'title': 'Time only', 'due_time': '14:30'}, format='json').status_code, 400)
+        response = self.client.post(url, {
+            'title': 'Team check-in', 'scope': 'team', 'due_date': '2026-12-01', 'due_time': '14:30',
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['due_time'], '14:30')
+        task = Task.objects.get(pk=response.data['id'])
+        self.client.force_authenticate(self.peer.user)
+        self.assertEqual(self.client.get(self.url(task)).data['due_time'], '14:30')
+        self.assertEqual(self.client.patch(self.url(task), {'due_time': '15:00'}, format='json').status_code, 403)
+        self.assertEqual(self.client.patch(self.url(task), {'status': 'complete'}, format='json').status_code, 200)
+
+        self.client.force_authenticate(self.owner.user)
+        self.assertEqual(self.client.patch(self.url(task), {'due_time': '15:15'}, format='json').status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual((task.due_date, task.due_time, task.status), (date(2026, 12, 1), time(15, 15), Task.Status.COMPLETE))
+        self.assertEqual(self.client.patch(self.url(task), {'due_date': None}, format='json').status_code, 200)
+        task.refresh_from_db()
+        self.assertIsNone(task.due_date)
+        self.assertIsNone(task.due_time)
+
+    def test_same_day_timed_deadline_becomes_overdue_in_monterrey(self):
+        today = date(2026, 12, 1)
+        self.task(title='Past this morning', source=Task.Source.SELF, due_date=today, due_time=time(11))
+        self.task(title='Later today', source=Task.Source.SELF, due_date=today, due_time=time(14))
+        self.task(title='Date only', due_date=today)
+        with patch('fellows.views.timezone.localtime', return_value=datetime(2026, 12, 1, 12, tzinfo=ZoneInfo('America/Monterrey'))):
+            deadlines = self.client.get('/api/dashboard/overview/').json()['deadlines']
+        self.assertEqual([row['title'] for row in deadlines['overdue']], ['Past this morning'])
+        self.assertEqual([row['title'] for row in deadlines['upcoming']], ['Later today', 'Date only'])
 
     def test_missing_profile_and_cohort_are_clear_errors(self):
         user = get_user_model().objects.create_user(username='no-profile')

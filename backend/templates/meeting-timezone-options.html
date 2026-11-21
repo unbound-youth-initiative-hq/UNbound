@@ -1,0 +1,3 @@
+{% for value, label in meeting_timezones %}
+  <option value="{{ value }}"{% if value == meeting_timezone %} selected{% endif %}>{{ label }}</option>
+{% endfor %}
