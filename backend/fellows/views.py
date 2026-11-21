@@ -31,7 +31,7 @@ from .google_api import (
     fetch_shared_calendar_events_in_range,
 )
 from .models import (
-    MeetingAvailability, Task, Fellow, FellowBadge, InviteCode, SDG, Cohort,
+    MeetingAvailability, Task, Fellow, FellowBadge, InviteCode, SDG, Cohort, CohortDriveLink,
     AvailabilityRequest, Phase, availability_task_visibility_filter,
 )
 from .serializers import MeetingAvailabilitySerializer, TaskSerializer, AvailabilityRequestSerializer
@@ -85,6 +85,7 @@ def dashboard_view(request):
     return render(request, 'fellow-dashboard.html', {
         'google_account': google_account_details(request.user),
         'google_integrations_enabled': settings.GOOGLE_INTEGRATIONS_ENABLED,
+        'drive_links': CohortDriveLink.objects.filter(cohort_id=fellow.cohort_id),
         'accent_palette': fellow.accent_palette if fellow else Fellow.AccentPalette.OCEAN,
     })
 

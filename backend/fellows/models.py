@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.core.validators import RegexValidator
 from django.utils import timezone
 
 
@@ -90,6 +91,26 @@ class Cohort(models.Model):
 
     class Meta:
         ordering = ['-start_date']
+
+
+class CohortDriveLink(models.Model):
+    cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name='drive_links')
+    title = models.CharField(max_length=150)
+    url = models.URLField(
+        'Google sharing link', max_length=2048,
+        validators=[RegexValidator(
+            r'^https://(?:drive|docs)\.google\.com/',
+            'Paste an HTTPS sharing link from drive.google.com or docs.google.com.',
+        )],
+        help_text='Copy the file or folder link from Google. Share it with the intended fellows in Drive.',
+    )
+
+    class Meta:
+        ordering = ['title', 'pk']
+        verbose_name = 'Google Drive link'
+
+    def __str__(self):
+        return self.title
 
 
 class InviteCode(models.Model):

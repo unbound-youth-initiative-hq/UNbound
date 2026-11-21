@@ -14,7 +14,7 @@ from django.urls import path
 from django.utils import timezone
 
 from .models import (
-    Chapter, Cohort, SDG, Fellow, Task, MeetingAvailability, Badge, FellowBadge,
+    Chapter, Cohort, CohortDriveLink, SDG, Fellow, Task, MeetingAvailability, Badge, FellowBadge,
     InviteCode, AvailabilityRequest, AvailabilitySubmission, Phase, ReminderBatch, ReminderDelivery, availability_task_visibility_filter,
 )
 
@@ -44,8 +44,15 @@ class SDGAdmin(admin.ModelAdmin):
     search_fields = ['name', 'code']
 
 
+class CohortDriveLinkInline(admin.TabularInline):
+    model = CohortDriveLink
+    fields = ['title', 'url']
+    extra = 0
+
+
 @admin.register(Cohort)
 class CohortAdmin(admin.ModelAdmin):
+    inlines = [CohortDriveLinkInline]
     list_display = ['name', 'project_name', 'phase', 'start_date', 'end_date', 'is_active']
     list_select_related = ['phase']
     fieldsets = [('Cohort', {'fields': ('name', 'is_active', ('start_date', 'end_date'))}), ('Project and progress', {'fields': ('project_name', 'project_description', 'phase', 'selected_sdgs')})]

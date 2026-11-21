@@ -23,11 +23,9 @@
       <button class="nav-item active" type="button" data-view="overview" onclick="showView('overview')">
         <i class="fa-solid fa-house"></i> Workspace
       </button>
-      {% if google_integrations_enabled %}
       <button class="nav-item" type="button" data-view="drive" onclick="showView('drive')">
         <i class="fa-brands fa-google-drive"></i> Google Drive
       </button>
-      {% endif %}
       <button class="nav-item" type="button" data-view="tasks" onclick="showView('tasks')">
         <i class="fa-solid fa-list-check"></i> Tasks
       </button>
@@ -218,17 +216,30 @@
         </div>
       </section>
 
-      {% if google_integrations_enabled %}
-      <!-- DUAL-SECTION GOOGLE DRIVE -->
       <section class="view" id="view-drive">
         <div class="page-head">
           <div>
-            <div class="eyebrow">Google Drive</div>
-            <h1>Document Center</h1>
-            <div class="sub">Access your personal project files and official shared workspace documents.</div>
+            <h1>Google Drive</h1>
+            <p class="sub">Open shared resources with the Google account your coordinator invited.</p>
+          </div>
+          <a class="btn btn-ghost" href="https://drive.google.com/" target="_blank" rel="noopener noreferrer">Open my Drive <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
+        </div>
+
+        <div class="card">
+          <div class="card-head-simple"><h3>Cohort files and folders</h3></div>
+          <div class="file-list-container">
+            {% for link in drive_links %}
+              <a class="file-item file-name" href="{{ link.url }}" target="_blank" rel="noopener noreferrer">
+                <span class="file-info"><i class="fa-brands fa-google-drive" aria-hidden="true"></i><span class="file-name">{{ link.title }}</span></span>
+                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+              </a>
+            {% empty %}
+              <p class="empty-state">Your coordinator hasn’t posted any links for your cohort yet.</p>
+            {% endfor %}
           </div>
         </div>
 
+        {% if google_integrations_enabled %}
         <div class="drive-two-column-layout">
           <!-- Column 1: Personal Files -->
           <div class="card drive-column">
@@ -275,9 +286,8 @@
             </div>
           </div>
         </div>
+        {% endif %}
       </section>
-
-      {% endif %}
       <!-- WORKSPACE TASKS -->
       <section class="view" id="view-tasks">
         <div class="page-head">
@@ -607,6 +617,6 @@
   </div>
 
   <script src="{% static 'dashboard-utils.js' %}?v=20261029-notice-dismiss-v2"></script>
-  <script src="{% static 'dashboard.js' %}?v=20261106-identity-launch"></script>
+  <script src="{% static 'dashboard.js' %}?v=20261121-cohort-drive"></script>
 </body>
 </html>
