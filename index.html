@@ -331,6 +331,7 @@
     .mstat-n {
       font-family: var(--display); font-weight: 600; font-size: clamp(40px, 4vw, 58px);
       line-height: 1; letter-spacing: -0.02em; color: var(--accent);
+      white-space: nowrap;
     }
     .mstat-suffix { display: inline-block; animation: mstatPop .45s cubic-bezier(.34,1.56,.64,1) both; }
     @keyframes mstatPop {
@@ -627,6 +628,9 @@
       @media (max-width: 460px) {
         .mstat { padding: 26px 6px; }
         .mstat-n { font-size: 36px; }
+      }
+      @media (max-width: 360px) {
+        .mstat-n { font-size: 30px; }
         .mstat-l { font-size: 11px; letter-spacing: 0.08em; }
       }
       .speakers-grid { grid-template-columns: 1fr; gap: 20px; }
@@ -1566,7 +1570,7 @@
         const dur = 3000, t0 = performance.now();
         function tick(now) {
           if (!missionRunning) return;
-          const p = Math.min((now - t0) / dur, 1);
+          const p = Math.max(0, Math.min((now - t0) / dur, 1));
           const eased = 1 - Math.pow(1 - p, 3);
           el.textContent = fmt(Math.round(eased * target));
           if (p < 1) { requestAnimationFrame(tick); return; }
