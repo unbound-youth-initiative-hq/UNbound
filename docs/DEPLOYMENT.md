@@ -43,7 +43,7 @@ In **Admin → Badges**, choose a badge and select its artwork, or upload a PNG,
 
 ## Email selected fellows
 
-In **Admin → Fellows**, select the recipients, choose **Email selected fellows (BCC draft)** and click **Go**. Review the addresses and click **Open BCC draft**. Write and send the message from your mail app. If you use webmail, you can also copy the addresses into its BCC field. This uses the verified addresses from the selected active fellows’ Google sign-ins and works with the existing identity-only configuration.
+In **Admin → Fellows**, select one or more recipients, then click **Prepare individual assignment drafts** above the list. Review and edit each message, then click **Open in mail app** to send it from your email client. For long drafts or webmail, copy the address, subject, and message into a new email. Drafts use the verified addresses from selected active fellows’ Google sign-ins.
 
 ## Data preservation
 

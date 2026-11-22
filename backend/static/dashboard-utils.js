@@ -112,5 +112,21 @@
     return `${hour % 12 || 12}:${time[2]} ${hour < 12 ? 'AM' : 'PM'} Monterrey time`;
   }
 
-  return { taskIconForeground, escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime };
+  function adjacentAvailabilitySlot(key, day, hour, days, firstHour, endHour) {
+    switch (key) {
+      case 'ArrowLeft': day -= 1; break;
+      case 'ArrowRight': day += 1; break;
+      case 'ArrowUp': hour -= 1; break;
+      case 'ArrowDown': hour += 1; break;
+      case 'Home': day = 0; break;
+      case 'End': day = days - 1; break;
+      default: return null;
+    }
+    return {
+      day: Math.min(days - 1, Math.max(0, day)),
+      hour: Math.min(endHour - 1, Math.max(firstHour, hour))
+    };
+  }
+
+  return { taskIconForeground, escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime, adjacentAvailabilitySlot };
 }));

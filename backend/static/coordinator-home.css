@@ -1,0 +1,83 @@
+.coordinator-home {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.coordinator-home h2 {
+  margin: 0;
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+  font-weight: 700;
+  color: var(--body-fg);
+}
+
+.coordinator-overview, .coordinator-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 14px;
+}
+
+.coordinator-summary, .coordinator-card {
+  border: 1px solid var(--hairline-color);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.coordinator-summary:link, .coordinator-summary:visited {
+  display: grid;
+  gap: 5px;
+  background: var(--darkened-bg);
+  color: var(--body-fg);
+  text-decoration: none;
+}
+
+.coordinator-summary strong {
+  font-size: 1.85rem;
+  font-weight: 750;
+  line-height: 1;
+  color: var(--link-fg);
+}
+
+.coordinator-summary:hover {
+  border-color: var(--link-hover-color);
+}
+
+.coordinator-card {
+  background: var(--body-bg);
+}
+
+.coordinator-card h3 {
+  margin: 0 0 8px;
+  color: var(--body-fg);
+  font-size: 1rem;
+}
+
+.coordinator-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.coordinator-card li {
+  padding: 0;
+  list-style: none;
+}
+
+.coordinator-card a {
+  display: block;
+  padding-block: 7px;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.coordinator-home a:focus-visible, .coordinator-records summary:focus-visible {
+  outline: 2px solid var(--link-fg);
+  outline-offset: 3px;
+}
+
+.coordinator-records summary {
+  cursor: pointer;
+  padding-block: 10px;
+  font-weight: 700;
+}

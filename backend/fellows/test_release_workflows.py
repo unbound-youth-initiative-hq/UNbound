@@ -27,27 +27,40 @@ class ReleaseWorkflowTests(TestCase):
         self.assertNotContains(response, 'google_refresh_token')
         self.assertEqual(self.client.get('/admin/fellows/task/add/').status_code, 302)
 
-    def test_selected_email_draft_uses_only_verified_google_recipients(self):
-        from allauth.socialaccount.models import SocialAccount
-        from django.core import mail
-        def google_fellow(name, *, verified=True, active=True):
-            user = get_user_model().objects.create_user(name, email=f'{name}@local.example', is_active=active)
-            SocialAccount.objects.create(user=user, uid=name, provider='google', extra_data={
-                'email': f'{name}@google.example', 'email_verified': verified,
-            })
-            return Fellow.objects.create(user=user, cohort=self.cohort)
-        included = google_fellow('included')
-        unverified = google_fellow('unverified', verified=False)
-        inactive = google_fellow('inactive', active=False)
-        google_fellow('other')
-        response = self.client.post(reverse('admin:fellows_fellow_changelist'), {
-            'action': 'email_selected_fellows', '_selected_action': [included.pk, unverified.pk, inactive.pk],
-        })
-        self.assertEqual(response.context['recipients'], ['included@google.example'])
-        self.assertEqual(response.context['skipped'], 2)
-        self.assertContains(response, 'mailto:?bcc=included%40google.example')
-        self.assertNotContains(response, 'other@google.example')
-        self.assertEqual(len(mail.outbox), 0)
+    def test_task_list_offers_drafts_and_fellows_list_drops_old_controls(self):
+        response = self.client.get(reverse('admin:fellows_fellow_changelist'))
+        self.assertNotContains(response, 'Prepare individual assignment drafts')
+        self.assertNotContains(response, 'email_selected_fellows')
+        self.assertNotContains(response, reverse('admin:fellows_fellow_send_pending_reminders'))
+        Task.objects.create(title='Pending', assigned_to=self.fellow)
+        tasks = self.client.get(reverse('admin:fellows_task_changelist'))
+        self.assertContains(tasks, 'task-draft-action.js')
+        self.assertContains(tasks, 'Email about overdue tasks')
+        self.assertContains(tasks, 'Email about selected tasks')
+
+    def test_dashboard_exposes_accessible_navigation_and_settings(self):
+        page = self.client.get(reverse('dashboard'))
+        self.assertContains(page, 'Mission Control')
+        self.assertContains(page, 'data-view="overview" aria-current="page"')
+        self.assertContains(page, '<dialog class="modal-box preferences-modal" id="dashboardPreferencesModal"')
+        self.assertContains(page, 'aria-describedby="availabilityInstructions"')
+        resources = self.client.get(reverse('dashboard-drive'))
+        self.assertContains(resources, 'data-view="drive" aria-current="page"')
+
+    def test_coordinator_summary_links_follow_permissions(self):
+        home = reverse('admin:index')
+        self.assertContains(self.client.get(home), 'Overdue assignments')
+        self.assertContains(self.client.get(home), 'Active WhenBound polls')
+        from django.contrib.auth.models import Permission
+        restricted = get_user_model().objects.create_user('restricted', password='test', is_staff=True)
+        restricted.user_permissions.add(Permission.objects.get(codename='view_fellow'))
+        self.client.post(reverse('admin:logout'))
+        self.client.post(reverse('admin:login'), {'username': restricted.username, 'password': 'test', 'next': home})
+        page = self.client.get(home)
+        self.assertContains(page, 'Fellows and awards')
+        self.assertNotContains(page, 'and email drafts')
+        self.assertNotContains(page, 'Overdue assignments')
+        self.assertNotContains(page, 'Active WhenBound polls')
 
     def test_badge_admin_upload_and_remove_uses_database(self):
         from io import BytesIO
@@ -123,18 +136,23 @@ class ReleaseWorkflowTests(TestCase):
         self.client.post('/admin/logout/')
         self.client.post('/admin/login/', {'username': 'coordinator', 'password': 'test', 'next': '/admin/'})
         url = reverse('admin:fellows_cohort_change', args=[self.cohort.pk])
-        self.assertContains(self.client.get(url), 'id_drive_links-TOTAL_FORMS')
+        page = self.client.get(url)
+        self.assertContains(page, 'id_drive_links-TOTAL_FORMS')
+        self.assertContains(page, 'data-resource-preview')
         link = 'https://drive.google.com/drive/folders/sample?resourcekey=sample'
         form = {
             'name': self.cohort.name, 'start_date': self.cohort.start_date.isoformat(),
             'end_date': self.cohort.end_date.isoformat(), 'is_active': 'on',
             'drive_links-TOTAL_FORMS': '1', 'drive_links-INITIAL_FORMS': '0',
             'drive_links-0-title': 'Cohort folder', 'drive_links-0-url': link,
+            'drive_links-0-resource_icon_override': 'guide',
             'drive_links-0-is_published': 'on', '_save': 'Save',
         }
         self.assertEqual(self.client.post(url, form).status_code, 302)
         self.assertContains(self.client.get('/dashboard/'), link)
         resource = self.cohort.drive_links.get()
+        self.assertEqual(resource.resource_icon_override, 'guide')
+        self.assertContains(self.client.get('/dashboard/'), 'fa-book file-doc')
         form.update({'drive_links-INITIAL_FORMS': '1', 'drive_links-0-id': resource.pk,
                      'drive_links-0-DELETE': 'on'})
         self.assertEqual(self.client.post(url, form).status_code, 302)

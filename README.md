@@ -16,4 +16,4 @@ node --test tests/dashboard-utils.test.cjs
 
 This branch fixes assignment permissions and shared completion, unsafe frontend text rendering, availability validation/submission, demo-data side effects, reminder confirmation/queuing, and production settings. Django Admin now provides daily-work shortcuts and grouped forms, with an editable phase catalog and cohort dropdown.
 
-Azure provisioning, live Google verification, migration of the divergent local database, and real email activation remain environment-specific release steps. Coordinators can upload badge artwork and prepare BCC drafts for selected fellows in Django Admin.
+Azure provisioning, live Google verification, migration of the divergent local database, and real email activation remain environment-specific release steps. Coordinators can upload badge artwork and prepare individual assignment drafts for selected fellows in Django Admin.

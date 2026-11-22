@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { taskCardsMarkup, phaseRoadmapMarkup, readJsonResponse, safeUrl, safeColor, safeIcon, percentage } = require('../static/dashboard-utils.js');
+const { taskCardsMarkup, phaseRoadmapMarkup, readJsonResponse, safeUrl, safeColor, safeIcon, percentage, adjacentAvailabilitySlot } = require('../static/dashboard-utils.js');
 
 const task = { id: 12, title: 'Prepare notes', description: 'Team work', scope: 'team', status: 'pending', source: 'unbound' };
 
@@ -86,4 +86,17 @@ test('validation errors, invalid responses and successful empty deletes are hand
 test('all-busy submission success is accepted independently of available slots', async () => {
   const data = { status: 'success', is_completed: true, slots: [{ is_available: false }] };
   assert.deepEqual(await readJsonResponse({ ok: true, status: 200, json: async () => data }), data);
+});
+
+test('availability arrow keys move by day or hour and stop at the poll bounds', () => {
+  const next = (key, day, hour) => adjacentAvailabilitySlot(key, day, hour, 9, 10, 16);
+  assert.deepEqual(next('ArrowRight', 6, 12), { day: 7, hour: 12 });
+  assert.deepEqual(next('ArrowLeft', 0, 12), { day: 0, hour: 12 });
+  assert.deepEqual(next('ArrowUp', 3, 10), { day: 3, hour: 10 });
+  assert.deepEqual(next('ArrowDown', 3, 15), { day: 3, hour: 15 });
+  assert.deepEqual(next('ArrowDown', 3, 13), { day: 3, hour: 14 });
+  assert.deepEqual(next('End', 3, 13), { day: 8, hour: 13 });
+  assert.deepEqual(next('Home', 3, 13), { day: 0, hour: 13 });
+  assert.equal(next('Tab', 3, 13), null);
+  assert.equal(next(' ', 3, 13), null);
 });

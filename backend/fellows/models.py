@@ -1,4 +1,3 @@
-import re
 from urllib.parse import urlsplit
 
 from django.db import models
@@ -9,6 +8,7 @@ from django.utils import timezone
 
 from .artwork import BadgeArtwork
 from .meeting_timezones import meeting_timezone_choices
+from .resource_appearance import DEFAULT_ICONS, ICONS, ResourceType, infer_resource_type
 
 
 def generate_random_code():
@@ -117,6 +117,16 @@ class DriveResource(models.Model):
         help_text='Use an HTTPS link. For private files and forms, grant access at the destination.',
     )
     description = models.TextField(blank=True, db_default='')
+    resource_type_override = models.CharField(
+        'Display type', max_length=8, blank=True, default='', db_default='',
+        choices=[('', 'Automatic'), *ResourceType.choices],
+        help_text='Automatic detects the type from the URL.',
+    )
+    resource_icon_override = models.CharField(
+        'Icon', max_length=8, blank=True, default='', db_default='',
+        choices=[('', 'Automatic'), *((key, label) for key, (label, _) in ICONS.items())],
+        help_text='Automatic picks the icon for the displayed type.',
+    )
 
     class Meta:
         abstract = True
@@ -126,20 +136,19 @@ class DriveResource(models.Model):
         return self.title
 
     @property
+    def resource_type(self):
+        if self.resource_type_override:
+            return ResourceType(self.resource_type_override)
+        return infer_resource_type(self.url)
+
+    @property
     def kind(self):
-        parts = urlsplit(self.url)
-        path = parts.path
-        if parts.hostname == 'forms.gle' or (
-            parts.hostname == 'docs.google.com' and path.startswith('/forms/')
-        ):
-            return 'Form'
-        if parts.hostname not in {'drive.google.com', 'docs.google.com'}:
-            return 'Website'
-        if re.match(r'^/(?:drive/)?(?:u/\d+/)?folders/[\w-]+(?:/|$)', path):
-            return 'Folder'
-        if re.match(r'^/(?:file|document|spreadsheets|presentation|forms|drawings|vids)/(?:u/\d+/)?d/[\w-]+(?:/|$)', path):
-            return 'File'
-        return 'Link'
+        return self.resource_type.label
+
+    @property
+    def resource_icon_class(self):
+        icon = self.resource_icon_override or DEFAULT_ICONS[self.resource_type]
+        return ICONS[icon][1]
 
 
 class CohortDriveLink(DriveResource):
