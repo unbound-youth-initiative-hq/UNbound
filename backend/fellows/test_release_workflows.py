@@ -129,7 +129,8 @@ class ReleaseWorkflowTests(TestCase):
             'name': self.cohort.name, 'start_date': self.cohort.start_date.isoformat(),
             'end_date': self.cohort.end_date.isoformat(), 'is_active': 'on',
             'drive_links-TOTAL_FORMS': '1', 'drive_links-INITIAL_FORMS': '0',
-            'drive_links-0-title': 'Cohort folder', 'drive_links-0-url': link, '_save': 'Save',
+            'drive_links-0-title': 'Cohort folder', 'drive_links-0-url': link,
+            'drive_links-0-is_published': 'on', '_save': 'Save',
         }
         self.assertEqual(self.client.post(url, form).status_code, 302)
         self.assertContains(self.client.get('/dashboard/'), link)

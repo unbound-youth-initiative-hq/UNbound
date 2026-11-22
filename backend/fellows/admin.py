@@ -1,29 +1,29 @@
 from base64 import b64encode
-from datetime import date
 from uuid import UUID
 from urllib.parse import quote, urlencode
 
-from allauth.socialaccount.models import SocialAccount
-from django.core.exceptions import ValidationError
-from django.core.validators import validate_email
-from smtplib import SMTPException
 
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
-from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import HttpResponseForbidden, HttpResponseNotAllowed
 from django.shortcuts import redirect, render
 from django.urls import path
 from django.utils import timezone
 from django.utils.html import format_html
 
-from .forms import BadgeAdminForm, SharedDriveResourceForm
+from .badges_engine import evaluate_and_sync_badges
+from .forms import AvailabilityRequestAdminForm, BadgeAdminForm, InviteBatchForm, SharedDriveResourceForm
 from .models import (
     Chapter, Cohort, CohortDriveLink, ConfirmedMeeting, SharedDriveResource, SDG, Fellow, Task, MeetingAvailability, Badge, FellowBadge,
-    InviteCode, AvailabilityRequest, AvailabilitySubmission, Phase, ReminderBatch, ReminderDelivery, availability_task_visibility_filter,
+    InviteCode, AvailabilityRequest, Phase, ReminderBatch, ReminderDelivery,
+)
+
+
+from .reminder_content import (
+    pending_tasks_email, pending_tasks_for_fellow, pending_tasks_for_selection, verified_google_addresses,
 )
 
 
@@ -54,7 +54,7 @@ class SDGAdmin(admin.ModelAdmin):
 
 class CohortDriveLinkInline(admin.TabularInline):
     model = CohortDriveLink
-    fields = ['title', 'url', 'pinned_by']
+    fields = ['title', 'url', 'description', 'is_published', 'pinned_by']
     readonly_fields = ['pinned_by']
     extra = 0
 
@@ -72,6 +72,13 @@ class CohortAdmin(admin.ModelAdmin):
     search_fields = ['name', 'project_name', 'project_description']
     filter_horizontal = ['selected_sdgs']
 
+    def get_deleted_objects(self, objs, request):
+        deleted, counts, permissions, protected = super().get_deleted_objects(objs, request)
+        polls = AvailabilityRequest.objects.filter(cohort__in=objs, assign_to_all=False)
+        if polls.exists():
+            protected = [*protected, 'Reassign the targeted WhenBound polls before deleting their cohort. You can mark the cohort inactive to archive it.']
+        return deleted, counts, permissions, protected
+
 
 @admin.register(SharedDriveResource)
 class SharedDriveResourceAdmin(admin.ModelAdmin):
@@ -79,7 +86,11 @@ class SharedDriveResourceAdmin(admin.ModelAdmin):
     list_display = ['title', 'audience', 'is_published']
     list_filter = ['audience', 'is_published', 'cohorts']
     filter_horizontal = ['cohorts']
-    search_fields = ['title']
+    search_fields = ['title', 'description', 'url']
+    fieldsets = [
+        ('Resource', {'fields': ('title', 'url', 'description')}),
+        ('Audience and publication', {'fields': ('audience', 'cohorts', 'is_published')}),
+    ]
 
 
 @admin.register(ConfirmedMeeting)
@@ -96,27 +107,34 @@ class InviteCodeAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'cohort', 'role']
     search_fields = ['code']
     readonly_fields = ['times_used', 'created_at']
-    actions = ['generate_5_codes']
 
-    @admin.action(description="Generate 5 single-use invite codes")
-    def generate_5_codes(self, request, queryset):
-        active_cohort = Cohort.objects.filter(is_active=True).first()
-        created = []
-        for _ in range(5):
-            code_obj = InviteCode.objects.create(created_by=request.user, cohort=active_cohort)
-            created.append(code_obj.code)
-        self.message_user(request, f"Successfully generated 5 invite codes: {', '.join(created)}")
+    def get_urls(self):
+        return [
+            path('generate/', self.admin_site.admin_view(self.generate_invites), name='fellows_invitecode_generate'),
+        ] + super().get_urls()
+
+    def generate_invites(self, request):
+        if not self.has_add_permission(request):
+            return HttpResponseForbidden('You do not have permission to generate invitations.')
+        form = InviteBatchForm(request.POST if request.method == 'POST' else None)
+        if request.method == 'POST' and form.is_valid():
+            with transaction.atomic():
+                created = [
+                    InviteCode.objects.create(
+                        created_by=request.user, cohort=form.cleaned_data['cohort'], max_uses=1,
+                    )
+                    for _ in range(5)
+                ]
+            self.message_user(request, f"Created five single-use invitations: {', '.join(invite.code for invite in created)}")
+            return redirect('admin:fellows_invitecode_changelist')
+        return render(request, 'admin/fellows/invitecode/generate.html', {
+            **self.admin_site.each_context(request), 'title': 'Generate invitations', 'form': form,
+        })
 
 
 class FellowBadgeInline(admin.TabularInline):
     model = FellowBadge
     extra = 0
-
-
-class TaskInline(admin.TabularInline):
-    model = Task
-    extra = 0
-    fields = ['title', 'scope', 'status', 'source', 'due_date']
 
 
 class TaskAssignmentForm(forms.Form):
@@ -130,7 +148,7 @@ class TaskAssignmentForm(forms.Form):
 
     title = forms.CharField(max_length=300)
     description = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
-    target_mode = forms.ChoiceField(choices=TARGET_CHOICES, initial="all_fellows_individual")
+    target_mode = forms.ChoiceField(label='Assign to', choices=[('', 'Choose a target'), *TARGET_CHOICES])
     fellow = forms.ModelChoiceField(queryset=Fellow.objects.none(), required=False)
     cohort = forms.ModelChoiceField(queryset=Cohort.objects.none(), required=False)
     due_date = forms.DateField(
@@ -183,60 +201,6 @@ class TaskAssignmentForm(forms.Form):
         return cleaned
 
 
-def pending_tasks_for_fellow(fellow):
-    task_filter = Q(assigned_to=fellow)
-    if fellow.cohort_id:
-        task_filter |= Q(scope=Task.Scope.TEAM, cohort_id=fellow.cohort_id)
-    tasks = list(
-        Task.objects.filter(
-            task_filter,
-            status__in=[Task.Status.PENDING, Task.Status.IN_PROGRESS],
-        ).filter(
-            availability_task_visibility_filter(fellow)
-        ).select_related("availability_request").distinct()
-    )
-    tasks.sort(key=lambda task: (
-        0 if task.source == Task.Source.UNBOUND else 1,
-        0 if task.availability_request_id else 1,
-        task.due_date or date.max,
-        task.due_time is None,
-        task.due_time,
-        task.created_at,
-        task.pk,
-    ))
-    return tasks
-
-
-def pending_tasks_email(fellow, tasks):
-    full_name = fellow.user.get_full_name().strip()
-    first_name = fellow.user.first_name.strip() or (full_name.split()[0] if full_name else "")
-    if not first_name:
-        first_name = fellow.user.email.partition("@")[0] or fellow.user.username or "there"
-
-    site_base = getattr(settings, "SITE_BASE_URL", "").rstrip("/")
-    dashboard_url = f"{site_base}/dashboard/" if site_base else "/dashboard/"
-    lines = [
-        f"Hi {first_name},",
-        "",
-        f"You have {len(tasks)} assignment(s) that are not complete yet.",
-        "Tasks assigned by UNbound appear first. WhenBound requests are first within that group.",
-        "",
-    ]
-    for task in tasks:
-        labels = [task.get_source_display()]
-        if task.availability_request_id:
-            labels.insert(0, "WhenBound")
-        labels.append("Team" if task.scope == Task.Scope.TEAM else "Individual")
-        due = f" — due {task.due_date.strftime('%b %d, %Y')}" if task.due_date else ""
-        if task.due_time:
-            due += f" at {task.due_time:%I:%M %p} Monterrey time"
-        lines.append(f"- [{ ' · '.join(labels) }] {task.title}{due}")
-        if task.description:
-            lines.append(f"  {task.description}")
-    lines.extend(["", f"Open your UNbound dashboard: {dashboard_url}"])
-    return "\n".join(lines)
-
-
 @admin.register(Fellow)
 class FellowAdmin(admin.ModelAdmin):
     change_list_template = "admin/fellows/fellow/change_list.html"
@@ -244,7 +208,7 @@ class FellowAdmin(admin.ModelAdmin):
     list_filter = ['role', 'chapter', 'cohort']
     search_fields = ['user__first_name', 'user__last_name', 'user__email']
     inlines = [FellowBadgeInline]
-    actions = ['email_selected_fellows']
+    actions = ['prepare_individual_drafts', 'email_selected_fellows']
     autocomplete_fields = ['user', 'chapter', 'cohort']
     list_select_related = ['user', 'chapter', 'cohort__phase']
     readonly_fields = ['xp_points', 'get_current_phase']
@@ -254,24 +218,51 @@ class FellowAdmin(admin.ModelAdmin):
         ('Preferences', {'fields': ('accent_palette', 'meeting_timezone'), 'classes': ('collapse',)}),
     ]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.method == 'POST' and getattr(request.resolver_match, 'url_name', '') == 'fellows_fellow_change':
+            return queryset.select_for_update(of=('self',))
+        return queryset
+
+    def save_formset(self, request, form, formset, change):
+        super().save_formset(request, form, formset, change)
+        if formset.model is FellowBadge and formset.has_changed():
+            evaluate_and_sync_badges(form.instance)
+
+    def has_prepare_drafts_permission(self, request):
+        return self.has_change_permission(request) and (
+            request.user.has_perm('fellows.view_task') or request.user.has_perm('fellows.change_task')
+        )
+
+    @admin.action(permissions=['prepare_drafts'], description='Prepare individual assignment drafts')
+    def prepare_individual_drafts(self, request, queryset):
+        selected = queryset.filter(role=Fellow.Role.FELLOW, user__is_active=True)
+        addresses = verified_google_addresses(selected)
+        fellows = list(selected.filter(user_id__in=addresses).select_related('user'))
+        pending = pending_tasks_for_selection(fellows)
+        now = timezone.localtime()
+        subject = 'Your UNbound assignment check-in'
+        drafts = []
+        for fellow in fellows:
+            address = addresses[fellow.user_id]
+            body = pending_tasks_email(fellow, pending[fellow.pk], now=now)
+            mailto = 'mailto:' + quote(address, safe='@') + '?' + urlencode(
+                {'subject': subject, 'body': body}, quote_via=quote,
+            )
+            drafts.append({
+                'fellow': fellow, 'address': address, 'subject': subject, 'body': body,
+                'mailto': mailto,
+            })
+        return render(request, 'admin/fellows/fellow/individual_drafts.html', {
+            **self.admin_site.each_context(request), 'opts': self.model._meta,
+            'title': 'Individual assignment drafts', 'drafts': drafts,
+            'skipped': queryset.count() - len(fellows),
+        })
+
     @admin.action(permissions=['change'], description='Email selected fellows (BCC draft)')
     def email_selected_fellows(self, request, queryset):
         selected = queryset.filter(role=Fellow.Role.FELLOW, user__is_active=True)
-        accounts = SocialAccount.objects.filter(
-            provider='google', user__fellow_profile__in=selected,
-        ).order_by('pk').values_list('user_id', 'extra_data')
-        addresses = {}
-        for user_id, data in accounts:
-            address = data.get('email')
-            if not isinstance(address, str) or not (
-                data.get('email_verified') is True or data.get('verified_email') is True
-            ):
-                continue
-            try:
-                validate_email(address)
-            except ValidationError:
-                continue
-            addresses.setdefault(user_id, address)
+        addresses = verified_google_addresses(selected)
         recipients = sorted(set(addresses.values()), key=str.casefold)
         bcc = ','.join(recipients)
         return render(request, 'admin/fellows/fellow/email_selected.html', {
@@ -288,7 +279,7 @@ class FellowAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         context = {
             **(extra_context or {}),
-            "can_email_pending_assignments": self.has_change_permission(request),
+            "can_email_pending_assignments": self.has_prepare_drafts_permission(request),
         }
         return super().changelist_view(request, extra_context=context)
 
@@ -303,7 +294,7 @@ class FellowAdmin(admin.ModelAdmin):
         return custom_urls + super().get_urls()
 
     def send_pending_reminders(self, request):
-        if not self.has_change_permission(request):
+        if not self.has_prepare_drafts_permission(request):
             return HttpResponseForbidden('You do not have permission to email fellows.')
         if request.method not in ('GET', 'POST'):
             return HttpResponseNotAllowed(['GET', 'POST'])
@@ -358,13 +349,34 @@ class TaskEditForm(forms.ModelForm):
         return values
 
 
+class OverdueTaskFilter(admin.SimpleListFilter):
+    title = 'Deadline'
+    parameter_name = 'deadline'
+
+    def lookups(self, request, model_admin):
+        return [('overdue', 'Overdue and incomplete')]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'overdue':
+            return overdue_tasks(queryset)
+        return queryset
+
+
+def overdue_tasks(queryset):
+    now = timezone.localtime()
+    return queryset.exclude(status=Task.Status.COMPLETE).filter(
+        Q(availability_request__isnull=True) | Q(availability_request__is_active=True),
+        Q(due_date__lt=now.date()) | Q(due_date=now.date(), due_time__lte=now.time()),
+    )
+
+
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
     form = TaskEditForm
     change_list_template = "admin/fellows/task/change_list.html"
     list_display = ['title', 'assigned_to', 'scope', 'status', 'source', 'due_date', 'due_time', 'created_at']
-    list_filter = ['status', 'scope', 'source']
-    search_fields = ['title', 'description']
+    list_filter = [OverdueTaskFilter, 'status', 'scope', 'source', 'cohort']
+    search_fields = ['title', 'description', 'assigned_to__user__email', 'assigned_to__user__first_name', 'assigned_to__user__last_name']
     list_select_related = ['assigned_to__user', 'cohort']
     fieldsets = [('Assignment', {'fields': ('title', 'description', 'source', 'status', ('due_date', 'due_time'))}), ('Who completes it', {'fields': ('scope', 'assigned_to', 'cohort')}), ('Appearance', {'fields': ('icon', 'color'), 'classes': ('collapse',)})]
     autocomplete_fields = ['assigned_to', 'cohort']
@@ -387,7 +399,7 @@ class TaskAdmin(admin.ModelAdmin):
         if not self.has_add_permission(request):
             return HttpResponseForbidden("You do not have permission to assign tasks.")
 
-        form = TaskAssignmentForm(request.POST or None)
+        form = TaskAssignmentForm(request.POST if request.method == 'POST' else None)
         if request.method == "POST" and form.is_valid():
             data = form.cleaned_data
             mode = data["target_mode"]
@@ -412,11 +424,20 @@ class TaskAdmin(admin.ModelAdmin):
                 return redirect("admin:fellows_task_changelist")
             form.add_error(None, "No tasks were created for this target.")
 
+        recipient_count_by_cohort = dict(
+            Fellow.objects.filter(role=Fellow.Role.FELLOW, user__is_active=True).order_by()
+            .values_list('cohort_id').annotate(total=Count('pk'))
+        )
         context = {
             **self.admin_site.each_context(request),
             "title": "Assign a task",
             "opts": self.model._meta,
             "form": form,
+            "recipient_counts": {
+                "cohorts": recipient_count_by_cohort,
+                "total": sum(recipient_count_by_cohort.values()),
+                "unassigned": recipient_count_by_cohort.get(None, 0),
+            },
         }
         return render(request, "admin/fellows/task/assignment_form.html", context)
 
@@ -454,6 +475,7 @@ class BadgeAdmin(admin.ModelAdmin):
 
 @admin.register(AvailabilityRequest)
 class AvailabilityRequestAdmin(admin.ModelAdmin):
+    form = AvailabilityRequestAdminForm
     list_display = ['title', 'cohort', 'assign_to_all', 'start_date', 'end_date', 'deadline', 'is_active', 'get_response_summary', 'created_at']
     list_filter = ['is_active', 'assign_to_all', 'cohort']
     search_fields = ['title', 'description']
@@ -462,9 +484,13 @@ class AvailabilityRequestAdmin(admin.ModelAdmin):
         ('Request Details', {
             'fields': ('title', 'description', 'is_active')
         }),
-        ('Date & Time Window', {
-            'fields': (('start_date', 'end_date'), ('start_hour', 'end_hour'), 'deadline'),
-            'description': 'Changing the dates or hours clears previous responses and asks fellows to submit again. Enter hours in Monterrey time using the 24-hour clock. Fellows see slots in their selected time zone.'
+        ('Possible meeting times', {
+            'fields': (('start_date', 'end_date'), ('start_hour', 'end_hour'), 'reset_snapshot', 'confirm_response_reset'),
+            'description': 'Both dates are included. Enter hours in Monterrey time. The end hour is exclusive. Use 24 for midnight. Fellows see slots in their selected time zone.',
+        }),
+        ('Response due date', {
+            'fields': ('deadline',),
+            'description': 'This date appears on the fellow’s WhenBound task. An active poll can still accept late responses.',
         }),
         ('Assignment Target', {
             'fields': ('cohort', 'assign_to_all'),
@@ -476,14 +502,20 @@ class AvailabilityRequestAdmin(admin.ModelAdmin):
     )
     actions = ['sync_tasks']
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        # Django's change form wraps this POST in a transaction. Hold the same
+        # lock used by the response service across validation and saving.
+        if request.method == 'POST' and getattr(request.resolver_match, 'url_name', '') == 'fellows_availabilityrequest_change':
+            return queryset.select_for_update()
+        return queryset
+
     def save_model(self, request, obj, form, change):
         if not obj.created_by:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
-        if obj.is_active:
-            obj.create_tasks_for_fellows()
 
-    @admin.action(description="Ensure UNbound tasks exist for all assigned fellows")
+    @admin.action(permissions=['change'], description="Repair linked tasks for selected polls")
     def sync_tasks(self, request, queryset):
         synced_requests = 0
         skipped_inactive = 0

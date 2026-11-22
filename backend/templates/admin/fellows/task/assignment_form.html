@@ -12,11 +12,13 @@
     <p id="fellow-target-row">{{ form.fellow.errors }}{{ form.fellow.label_tag }} {{ form.fellow }}</p>
     <p id="cohort-target-row">{{ form.cohort.errors }}{{ form.cohort.label_tag }} {{ form.cohort }}</p>
     {{ form.due_date.errors }}<p>{{ form.due_date.label_tag }} {{ form.due_date }}<br>{{ form.due_date.help_text }}</p>
+    <p id="assignment-audience" role="status"></p>
     <div class="submit-row">
       <input type="submit" value="Create assignment" class="default">
       <a href="{% url 'admin:fellows_task_changelist' %}" class="closelink">Cancel</a>
     </div>
   </form>
+  {{ recipient_counts|json_script:"assignment-counts" }}
   <script>
     (function () {
       const mode = document.getElementById("id_target_mode");
@@ -24,6 +26,8 @@
       const cohortRow = document.getElementById("cohort-target-row");
       const fellow = document.getElementById("id_fellow");
       const cohort = document.getElementById("id_cohort");
+      const counts = JSON.parse(document.getElementById("assignment-counts").textContent);
+      const audience = document.getElementById("assignment-audience");
 
       function updateTargetFields() {
         const value = mode.value;
@@ -33,9 +37,25 @@
         cohortRow.hidden = !showCohort;
         if (!showFellow) fellow.value = "";
         if (!showCohort) cohort.value = "";
+        let count = 0;
+        if (value === "fellow") count = fellow.value ? 1 : 0;
+        else if (showCohort) count = counts.cohorts[cohort.value] || 0;
+        else if (value) count = counts.total;
+
+        if (!value) audience.textContent = "";
+        else if (value === "all_cohorts_team" && counts.unassigned) {
+          audience.textContent = "Assign every fellow to a cohort before using this shared-team option.";
+        } else {
+          const completion = value.endsWith("_team")
+            ? "One fellow completes the assignment for their whole cohort."
+            : "Each fellow completes their own assignment.";
+          audience.textContent = `${count} active fellow${count === 1 ? "" : "s"}. ${completion}`;
+        }
       }
 
       mode.addEventListener("change", updateTargetFields);
+      fellow.addEventListener("change", updateTargetFields);
+      cohort.addEventListener("change", updateTargetFields);
       updateTargetFields();
     })();
   </script>

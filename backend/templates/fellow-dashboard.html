@@ -27,7 +27,7 @@
         <i class="fa-solid fa-house"></i> Workspace
       </button>
       <button class="nav-item{% if drive_active %} active{% endif %}" type="button" data-view="drive" onclick="showView('drive')">
-        <i class="fa-brands fa-google-drive"></i> Google Drive
+        <i class="fa-solid fa-folder-open"></i> Resources
       </button>
       <button class="nav-item" type="button" data-view="tasks" onclick="showView('tasks')">
         <i class="fa-solid fa-list-check"></i> Tasks
@@ -239,8 +239,8 @@
       <section class="view{% if drive_active %} active{% endif %}" id="view-drive">
         <div class="page-head">
           <div>
-            <h1>Google Drive</h1>
-            <p class="sub">Use a Google account with access to open a file or folder.</p>
+            <h1>Resources</h1>
+            <p class="sub">Open links shared by your coordinator or pinned by your cohort.</p>
           </div>
           <a class="btn btn-ghost" href="https://drive.google.com/" target="_blank" rel="noopener noreferrer">Open my Drive <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
         </div>

@@ -111,7 +111,7 @@ def dashboard_view(request, drive=False):
             messages.success(request, 'Pinned to your cohort.' if created else 'You’ve already pinned this link.')
             return redirect('dashboard-drive')
 
-    links = CohortDriveLink.objects.filter(cohort_id=fellow.cohort_id)
+    links = CohortDriveLink.objects.filter(cohort_id=fellow.cohort_id, is_published=True)
     shared_resources = SharedDriveResource.objects.none()
     if fellow.cohort_id:
         shared_resources = SharedDriveResource.objects.filter(is_published=True).filter(

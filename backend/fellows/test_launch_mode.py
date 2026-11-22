@@ -70,12 +70,13 @@ class IdentityOnlyLaunchTests(TestCase):
         self.assertNotContains(page, folder.url)
         self.assertNotContains(page, document.url)
 
-    def test_drive_links_accept_only_https_google_drive_and_docs_hosts(self):
+    def test_coordinator_resources_require_safe_https_urls(self):
         link = CohortDriveLink(cohort=self.cohort, title='Workbook')
-        for url in ('https://drive.google.com/open?id=abc', 'https://docs.google.com/spreadsheets/d/abc/edit'):
+        for url in ('https://drive.google.com/open?id=abc', 'https://docs.google.com/spreadsheets/d/abc/edit',
+                    'https://forms.gle/abc', 'https://example.org/lesson'):
             link.url = url
             link.full_clean()
-        for url in ('http://drive.google.com/open?id=abc', 'https://drive.google.com.example.org/file',
+        for url in ('http://drive.google.com/open?id=abc', 'ftp://example.org/file',
                     'https://docs.google.com@example.org/file', 'javascript:alert(1)'):
             with self.subTest(url=url), self.assertRaises(ValidationError):
                 link.url = url

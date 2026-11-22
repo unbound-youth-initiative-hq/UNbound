@@ -100,16 +100,23 @@ class Cohort(models.Model):
         ordering = ['-start_date']
 
 
+def validate_resource_url(url):
+    try:
+        parts = urlsplit(url)
+        if parts.scheme == 'https' and parts.hostname and parts.username is None and parts.password is None:
+            return
+    except ValueError:
+        pass
+    raise ValidationError('Enter a valid HTTPS link without a username or password.')
+
+
 class DriveResource(models.Model):
     title = models.CharField(max_length=150)
     url = models.URLField(
-        'Google sharing link', max_length=2048,
-        validators=[RegexValidator(
-            r'^https://(?:drive|docs)\.google\.com/',
-            'Paste an HTTPS sharing link from drive.google.com or docs.google.com.',
-        )],
-        help_text='Copy the file or folder link from Google. Share it with the intended fellows in Drive.',
+        'Resource URL', max_length=2048, validators=[validate_resource_url],
+        help_text='Use an HTTPS link. For private files and forms, grant access at the destination.',
     )
+    description = models.TextField(blank=True, db_default='')
 
     class Meta:
         abstract = True
@@ -120,7 +127,14 @@ class DriveResource(models.Model):
 
     @property
     def kind(self):
-        path = urlsplit(self.url).path
+        parts = urlsplit(self.url)
+        path = parts.path
+        if parts.hostname == 'forms.gle' or (
+            parts.hostname == 'docs.google.com' and path.startswith('/forms/')
+        ):
+            return 'Form'
+        if parts.hostname not in {'drive.google.com', 'docs.google.com'}:
+            return 'Website'
         if re.match(r'^/(?:drive/)?(?:u/\d+/)?folders/[\w-]+(?:/|$)', path):
             return 'Folder'
         if re.match(r'^/(?:file|document|spreadsheets|presentation|forms|drawings|vids)/(?:u/\d+/)?d/[\w-]+(?:/|$)', path):
@@ -131,15 +145,17 @@ class DriveResource(models.Model):
 class CohortDriveLink(DriveResource):
     cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name='drive_links')
     pinned_by = models.ForeignKey('Fellow', on_delete=models.CASCADE, null=True, blank=True, editable=False)
+    is_published = models.BooleanField(default=True, db_default=True)
 
     class Meta(DriveResource.Meta):
-        verbose_name = 'Google Drive link'
+        verbose_name = 'cohort resource or pin'
+        verbose_name_plural = 'cohort resources and pins'
 
 
 class SharedDriveResource(DriveResource):
     class Audience(models.TextChoices):
         SELECTED = 'selected', 'Selected cohorts'
-        ALL = 'all', 'All cohorts'
+        ALL = 'all', 'All cohorts (fellows with a cohort)'
 
     audience = models.CharField(max_length=8, choices=Audience.choices, default=Audience.SELECTED)
     cohorts = models.ManyToManyField(
@@ -149,7 +165,7 @@ class SharedDriveResource(DriveResource):
     is_published = models.BooleanField(default=True)
 
     class Meta(DriveResource.Meta):
-        verbose_name = 'Shared Drive resource'
+        verbose_name = 'shared resource'
 
 
 class ConfirmedMeeting(models.Model):
