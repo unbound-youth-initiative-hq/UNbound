@@ -629,36 +629,44 @@ class AvailabilityRequest(models.Model):
         """Reconcile active recipients and task metadata without changing valid submissions."""
         from django.db import transaction
 
-        if not self.is_active:
-            return []
         with transaction.atomic():
-            # All creation paths lock the request, preventing duplicate task creation.
-            type(self).objects.select_for_update().get(pk=self.pk)
-            targets = self.target_fellows()
+            # Refresh under the same lock used by submissions and schedule edits.
+            poll = type(self).objects.select_for_update().get(pk=self.pk)
+            if not poll.is_active:
+                return []
+            targets = poll.target_fellows()
             if fellow is not None:
                 targets = targets.filter(pk=fellow.pk)
+            targets = list(targets)
+            existing = {
+                task.assigned_to_id: task
+                for task in poll.tasks.filter(assigned_to__in=targets).order_by('-pk')
+            }
             tasks = []
+            new_tasks = []
+            changed_tasks = []
+            values = {
+                'title': f"WhenBound: {poll.title}",
+                'description': poll.description or f"Submit your availability for {poll.start_date:%b %d} – {poll.end_date:%b %d}.",
+                'scope': Task.Scope.PERSONAL,
+                'source': Task.Source.UNBOUND,
+                'icon': 'fa-calendar-check',
+                'color': '#00B4D8',
+                'due_date': poll.deadline or poll.start_date,
+            }
             for recipient in targets:
-                values = {
-                    'title': f"WhenBound: {self.title}",
-                    'description': self.description or f"Submit your availability for {self.start_date.strftime('%b %d')} – {self.end_date.strftime('%b %d')}.",
-                    'scope': Task.Scope.PERSONAL,
-                    'source': Task.Source.UNBOUND,
-                    'icon': 'fa-calendar-check',
-                    'color': '#00B4D8',
-                    'due_date': self.deadline or self.start_date,
-                    'cohort': recipient.cohort,
-                }
-                task, created = Task.objects.get_or_create(
-                    assigned_to=recipient,
-                    availability_request=self,
-                    defaults={**values, 'status': Task.Status.PENDING},
-                )
-                if not created:
-                    for name, value in values.items():
+                fields = {**values, 'cohort_id': recipient.cohort_id}
+                task = existing.get(recipient.pk)
+                if task is None:
+                    task = Task(assigned_to=recipient, availability_request=poll, **fields)
+                    new_tasks.append(task)
+                elif any(getattr(task, name) != value for name, value in fields.items()):
+                    for name, value in fields.items():
                         setattr(task, name, value)
-                    task.save(update_fields=list(values))
+                    changed_tasks.append(task)
                 tasks.append(task)
+            Task.objects.bulk_create(new_tasks)
+            Task.objects.bulk_update(changed_tasks, [*values, 'cohort'])
             return tasks
 
     def __str__(self):

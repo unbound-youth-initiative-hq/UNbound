@@ -55,4 +55,12 @@ An older database preceding migration 0005 needs a reviewed export of its Fellow
 
 `python manage.py test fellows --settings=unbound.test_settings` uses an in-memory SQLite database and mocked/no external delivery. PostgreSQL deployment and live Google integration still require staging verification. Unit tests are not a substitute for that release check.
 
+## Beta backup and release
+
+Assign two recovery owners before rolling out to fellows. During active fellowship periods, export an encrypted PostgreSQL backup daily and again before migrations. Follow the [Supabase logical backup and restore guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore) using an authorized operator connection. Store the encrypted backup in organization-controlled storage, keep keys separately, and verify a test restore monthly. Confirm counts and sample relationships for cohorts, identities, invitations, tasks, WhenBound responses, badge awards, reminders and resources. Use an isolated database and keep email delivery disabled during the rehearsal.
+
+The external resources migration adds descriptive fields and retains database defaults for inserts by an older instance. The SDG migration fills missing goals and preserves edited labels. Run both on a PostgreSQL copy before production. After switching traffic, verify login, an existing task, a WhenBound response, an awarded badge and one shared resource visible to its intended cohort. If resources have been unpublished from a cohort form, recover by deploying a compatible fix. An older release predating cohort publication status would display those links again. Never reverse migrations as part of a routine application rollback.
+
+Run synthetic traffic at 5, 20 and 60 concurrent fellows before widening enrollment. Measure warm dashboard and task latency, shared completion, poll submission correctness, CPU, memory and database connections. Compare warm p95 against 2 seconds at 20 and 5 seconds at 60. Check Supabase database size, egress and last good backup. Keep the current single-worker Render process while those measurements are within budget.
+
 References: https://learn.microsoft.com/en-us/azure/app-service/configure-language-python and https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
