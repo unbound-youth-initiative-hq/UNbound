@@ -1,6 +1,40 @@
 # Running UNbound
 
-Sign in at `/admin/`. The home page has shortcuts for daily work.
+Sign in at `/admin/` to open the **Coordinator workspace**. Its shortcuts depend on your staff permissions.
+
+| From the Admin home page | What you can do |
+| --- | --- |
+| **Assignments** | Choose **Assign work** to create a task or **Manage assignments and email drafts** to open the task list. **Overdue assignments** opens the same list filtered to overdue work. |
+| **Scheduling** | Choose **Open a WhenBound poll** to collect availability or **Publish a confirmed meeting** once the time is set. **Active WhenBound polls** lists the open polls. |
+| **Fellows and cohorts** | Open **Fellows and awards** to update a fellow or award a badge, **Cohort projects and phases** to update a cohort, or **Generate invitations** for five single-use codes. |
+| **Resources** | Choose **Publish a resource** to share a link, **Manage resources** to edit its audience or publication status, or **Manage cohort resources and pins** to open a cohort. |
+
+Expand **Program setup and all records** to reach the individual lists, including **Badges**, **Phases**, and **Invite codes**.
+
+## Task email drafts
+
+1. Open **Admin → Tasks**. To narrow the list, search by task or fellow, or filter by cohort, scope, source, status, or deadline.
+2. Leave all rows unchecked and click **Email about overdue tasks** to include overdue, incomplete tasks matching the list. To choose specific work, check the task rows. The same button changes to **Email about selected tasks** and includes selected incomplete work, even if its deadline is in the future or blank.
+3. Expand a draft to review its **To**, **Subject**, and **Message**. Personal tasks are grouped into one draft per fellow. Shared team tasks are grouped into one draft per cohort, with eligible members together in **To**, so those recipients can see each other's addresses. Drafts use active fellows’ verified Google sign-in addresses. The preview reports fellows skipped for a missing verified address.
+4. Edit the subject or message, choose **Open in mail app**, then send from your mail app. For webmail or long drafts, copy the **To** and **Subject** fields and use **Copy message** for the body. You can also select and copy the text directly.
+
+If the email button is missing from **Tasks**, the coordinator needs permission to view or change tasks and to change fellows.
+
+## Badges and fellowship ranks
+
+To award a milestone, open **Fellows and awards**, click the fellow’s name, mark the badge **Earned** in their badge rows, and click **Save**. To change the milestone itself, open **Badges** and edit its name, artwork, earning rule, or XP reward. Coordinators can choose one of the 15 supplied illustrations or upload a custom image.
+
+Mission Control and Milestones show the fellow’s rank from their earned badge count. Their cohort’s **Current phase** is managed under **Cohort projects and phases**.
+
+| Earned badges | Fellowship rank |
+| --- | --- |
+| 0 | Pioneer • Level 1 |
+| 1–3 | Explorer • Level 1 |
+| 4–6 | Trailblazer • Level 2 |
+| 7–8 | Visionary • Level 3 |
+| 9 or more | UNbound Legend • Level 4 |
+
+## Program records
 
 The launch configuration uses Google for identity only. Fellows still use invitations, UNbound assignments, manual meeting availability, cohorts/phases, badges and personalization. Drive browsing/shared-file discovery, Calendar events/conflict highlighting/import, and Google Tasks mirrors are deferred. Staff can share ordinary Drive or Calendar links separately using Google’s sharing permissions. No Google Workspace subscription is required for this sign-in mode. See [LAUNCH.md](LAUNCH.md) for deployment and re-enabling details.
 
@@ -12,10 +46,8 @@ The launch configuration uses Google for identity only. Fellows still use invita
 - **Cohorts:** maintain dates, project details, goals, and select the current phase. Manage phase names, descriptions and order under Phases; the student roadmap uses the same catalog. Referenced phases cannot be deleted.
 - **Assignments:** Add opens the guided assignment form. Select a person, a cohort, or everyone, then choose individual or shared-team work. A team task is one shared completion; an individual task must be completed by each fellow. Completed records stay in the assignments list; filter by status to find them.
 - **Task deadlines:** fellows enter dates and optional times in Monterrey time. The browser supplies the calendar and clock popups, so their appearance varies across browsers and operating systems.
-- **Meeting requests:** choose a cohort or all fellows and a date/hour window (maximum 42 days). The ending hour is exclusive; 24 means midnight. All-busy responses count as submitted. Changing dates or hours clears old responses and requests resubmission. Updating instructions/deadline updates linked tasks.
-- **Task email drafts:** in **Admin → Tasks**, click **Email about overdue tasks** to draft reminders for overdue work matching the current filters. Checking tasks changes the button to **Email about selected tasks** and includes the selected incomplete tasks. Personal tasks go into one draft per fellow and team tasks go into one draft per cohort, addressed to active fellows with verified Google email addresses. Review and edit the drafts before opening them in your mail app.
+- **WhenBound Requests.** Choose a cohort or all fellows. Under **Possible meeting times**, enter the dates and hours in Monterrey time (up to 42 days). The end hour is exclusive and 24 means midnight. Set **Response due date** for the linked task. An active poll accepts late responses and an all-busy response counts as submitted. Changing the window after fellows respond requires confirmation to clear those responses and request them again.
 - **Reminder delivery records:** operators can inspect the status of existing batches under **Reminder deliveries**. Review any interrupted `sending` record before attempting a retry.
-- **Badges:** names/descriptions and earning rules are editable. Manual awards are on the Fellow's badge rows. Choose one of the 15 supplied illustrations or upload a custom image on the badge form.
 - **Invitations:** choose an explicit cohort and role. A blank cohort leaves a new fellow unassigned. The default code is single-use. Existing Google login is unchanged.
 
 ### Independent staff and fellow sign-in

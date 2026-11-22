@@ -5,6 +5,18 @@ from django.utils import timezone
 from .models import AvailabilitySubmission, Badge, Fellow, FellowBadge, Task
 
 
+def badge_rank_title(earned_count: int) -> str:
+    if earned_count >= 9:
+        return 'UNbound Legend • Level 4'
+    if earned_count >= 7:
+        return 'Visionary • Level 3'
+    if earned_count >= 4:
+        return 'Trailblazer • Level 2'
+    if earned_count >= 1:
+        return 'Explorer • Level 1'
+    return 'Pioneer • Level 1'
+
+
 def _progress(fellow):
     badges = list(Badge.objects.values('id', 'trigger_type', 'required_task_count', 'required_phase', 'xp_reward'))
     records = {
