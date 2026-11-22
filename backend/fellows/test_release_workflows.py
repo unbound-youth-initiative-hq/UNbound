@@ -29,6 +29,7 @@ class ReleaseWorkflowTests(TestCase):
 
     def test_fellows_list_offers_individual_drafts_without_old_email_controls(self):
         response = self.client.get(reverse('admin:fellows_fellow_changelist'))
+        self.assertContains(response, 'fellow-selection-actions.js')
         self.assertContains(response, 'Prepare individual assignment drafts')
         self.assertNotContains(response, 'email_selected_fellows')
         self.assertNotContains(response, reverse('admin:fellows_fellow_send_pending_reminders'))

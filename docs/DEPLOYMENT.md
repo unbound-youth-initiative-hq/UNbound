@@ -43,7 +43,7 @@ In **Admin → Badges**, choose a badge and select its artwork, or upload a PNG,
 
 ## Email selected fellows
 
-In **Admin → Fellows**, select the recipients, choose **Prepare individual assignment drafts**, and click **Go**. Review and edit each message, then click **Open in mail app** to send it from your email client. For long drafts or webmail, copy the address, subject, and message into a new email. Drafts use the verified addresses from selected active fellows’ Google sign-ins.
+In **Admin → Fellows**, select one or more recipients, then click **Prepare individual assignment drafts** above the list. Review and edit each message, then click **Open in mail app** to send it from your email client. For long drafts or webmail, copy the address, subject, and message into a new email. Drafts use the verified addresses from selected active fellows’ Google sign-ins.
 
 ## Data preservation
 

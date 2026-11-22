@@ -61,6 +61,7 @@ class PhaseOneWorkflowTests(TestCase):
         with patch('fellows.admin.timezone.localtime', return_value=now):
             response = self.admin_post(reverse('admin:fellows_fellow_changelist'), {
                 'action': 'prepare_individual_drafts',
+                'index': '0',
                 '_selected_action': [alex.pk, sam.pk, unverified.pk],
             })
         drafts = {draft['fellow'].pk: draft for draft in response.context['drafts']}
