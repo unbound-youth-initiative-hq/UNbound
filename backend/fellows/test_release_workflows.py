@@ -97,6 +97,24 @@ class ReleaseWorkflowTests(TestCase):
         self.assertEqual(Task.objects.count(), 0)
         self.assertFalse(self.cohort.selected_sdgs.exists())
 
+    def test_dashboard_and_milestones_agree_at_each_badge_rank_boundary(self):
+        self.client.get(reverse('badges-api'))
+        for earned_count, expected_rank in (
+            (0, 'Pioneer • Level 1'),
+            (1, 'Explorer • Level 1'), (3, 'Explorer • Level 1'),
+            (4, 'Trailblazer • Level 2'), (6, 'Trailblazer • Level 2'),
+            (7, 'Visionary • Level 3'), (8, 'Visionary • Level 3'),
+            (9, 'UNbound Legend • Level 4'), (12, 'UNbound Legend • Level 4'),
+        ):
+            with self.subTest(earned_count=earned_count):
+                self.fellow.badges.filter(badge__order__lte=earned_count).update(earned=True)
+                stats = self.client.get(reverse('dashboard-overview-api')).json()['stats']
+                milestones = self.client.get(reverse('badges-api')).json()
+                self.assertEqual(stats['earned_badges'], earned_count)
+                self.assertEqual(milestones['earned_count'], earned_count)
+                self.assertEqual(stats['level_name'], expected_rank)
+                self.assertEqual(milestones['level_title'], expected_rank)
+
     def test_cohortless_user_has_no_unrelated_team_data(self):
         self.fellow.cohort = None
         self.fellow.save()

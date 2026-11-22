@@ -45,7 +45,7 @@ from .models import (
 from .calendar_export import meeting_calendar
 from .forms import DrivePinForm
 from .serializers import MeetingAvailabilitySerializer, TaskSerializer, AvailabilityRequestSerializer
-from .badges_engine import evaluate_and_sync_badges
+from .badges_engine import badge_rank_title, evaluate_and_sync_badges
 
 
 def google_account_details(user):
@@ -472,17 +472,6 @@ class BadgesAPIView(APIView):
         earned_count = sum(record.earned for record in fellow_badges)
         total_count = len(fellow_badges)
 
-        if earned_count >= 9:
-            level_title = "UNbound Legend • Level 4"
-        elif earned_count >= 7:
-            level_title = "Visionary • Level 3"
-        elif earned_count >= 4:
-            level_title = "Trailblazer • Level 2"
-        elif earned_count >= 1:
-            level_title = "Explorer • Level 1"
-        else:
-            level_title = "Pioneer • Level 1"
-
         badges_data = []
         for fb in fellow_badges:
             b = fb.badge
@@ -501,7 +490,7 @@ class BadgesAPIView(APIView):
 
         return Response({
             'status': 'success',
-            'level_title': level_title,
+            'level_title': badge_rank_title(earned_count),
             'earned_count': earned_count,
             'total_count': total_count,
             'xp_points': fellow.xp_points,
@@ -1072,15 +1061,6 @@ class DashboardOverviewAPIView(APIView):
         badge_counts = fellow_badges.aggregate(total=Count('pk'), earned=Count('pk', filter=Q(earned=True)))
         earned_badges, total_badges = badge_counts['earned'], badge_counts['total']
 
-        if earned_badges >= 9:
-            level_name = "UNbound Legend"
-        elif earned_badges >= 7:
-            level_name = "Visionary level"
-        elif earned_badges >= 4:
-            level_name = "Trailblazer level"
-        else:
-            level_name = "Pioneer level"
-
         return Response({
             'status': 'success',
             'first_name': first_name,
@@ -1101,7 +1081,7 @@ class DashboardOverviewAPIView(APIView):
                 'completed_tasks': completed_tasks,
                 'earned_badges': earned_badges,
                 'total_badges': total_badges,
-                'level_name': level_name,
+                'level_name': badge_rank_title(earned_badges),
                 'completion_pct': completion_pct,
             },
             'sdgs': sdgs_data

@@ -5,16 +5,16 @@ The launch build defaults to `GOOGLE_INTEGRATIONS_ENABLED=false`. It requests on
 ## What is available
 
 - Invitation enrollment and returning Google sign-in using personal Google accounts.
-- Coordinator Drive resources for all or selected cohorts, fellow pins, confirmed meetings and upcoming or overdue deadlines. Run `python manage.py migrate --noinput` through `0017_fellowship_catalog` and `python manage.py setup_staff_group` before deploying the updated dashboard.
+- Coordinator-published HTTPS resources for all or selected cohorts, fellow Drive pins, confirmed meetings, and upcoming or overdue deadlines. Apply the release's pending migrations with `python manage.py migrate --noinput`, then run `python manage.py setup_staff_group`.
 - Staff administration, cohorts, phase catalog, individual and shared-team assignments.
 - Manual WhenBound selection, submission and group availability, including linked assignment completion.
 - Badges, SDGs, dashboard progress and personalization.
-- Reminder previews using the existing console backend. These are not delivered to inboxes.
+- Editable personal and cohort task email drafts under **Admin → Tasks**. Coordinators send them from their mail app. [Task email instructions](OPERATIONS.md#task-email-drafts)
 
 ## Deferred integrations
 
 - Google Drive browsing, folder selection, search and automatic shared workspace documents.
-- Google Calendar event lists, Next Up, availability import and calendar conflict overlays.
+- Google Calendar event lists, availability import and calendar conflict overlays. **Next Up** shows meetings and task deadlines recorded in UNbound.
 - Google Tasks import/API access and assignment mirroring.
 
 The dashboard omits the related controls and background requests. Authenticated direct requests to deferred endpoints receive HTTP 403 with `code: google_integrations_disabled`. The credential helper also refuses access, so previously saved API tokens cannot bypass the setting. Tokens already stored in an existing database are not deleted or revoked. New tokens are not persisted in launch mode. User identity links and UNbound data remain intact.
@@ -47,8 +47,9 @@ Before inviting fellows, verify on Azure:
 - Staff login/logout and fellow login/logout remain independent, including in the same browser.
 - Staff can assign individual/team tasks and a meeting poll. Fellows can complete tasks and submit availability. Other cohorts cannot access them.
 - Completing a team task updates the shared completion. All-busy availability counts as submitted.
-- Open Google Drive in the dashboard. Check that links belong to the signed-in fellow’s cohort, open in Drive, and trigger no Google data API requests from UNbound. Check badges, progress, SDGs and colors.
-- Reminder previews remain console-only. Platform logs must not capture OAuth authorization query strings. App Service/Application Insights logging must be reviewed separately from Gunicorn.
+- Open **Resources** in the fellow dashboard. Check that the fellow sees links published to their audience, can open a shared Drive link with the intended permissions, and sees their cohort’s pins. Check badges, progress, SDGs and colors.
+- Under **Admin → Tasks**, preview both overdue work and selected tasks. Check that personal and team drafts have the intended recipients and that **Open in mail app** opens an editable message.
+- Platform logs must omit OAuth authorization query strings. Review platform logging separately from Gunicorn.
 
 Local tests use synthetic SQLite data and mocked OAuth responses. They do not establish live Google consent, Azure startup, or PostgreSQL behavior. Those remain deployment acceptance checks.
 

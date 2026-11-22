@@ -25,7 +25,7 @@ Deploy the contents of `backend/` as the app root. Use a supported Python 3.14 r
 
 After a database backup, run migrations as one release step, then `collectstatic --noinput` and `check --deploy`. Startup command: `sh start.sh`. Do not migrate from each worker. Enable HTTPS Only in Azure. Django intentionally leaves HSTS include-subdomains and preloading off until domain ownership/TLS coverage is confirmed. This produces W005/W021 from check --deploy; enable DJANGO_HSTS_INCLUDE_SUBDOMAINS and DJANGO_HSTS_PRELOAD only after reviewing all subdomains and the preload requirements. Register the exact public HTTPS Google OAuth callback ending in `/accounts/google/login/callback/`. Configure Google Auth Platform Data Access for identity scopes only (`openid`, email, profile), remove Calendar/Drive/Tasks scopes from the launch project configuration, and review Branding/Audience before releasing. Basic sign-in does not require sensitive/restricted-scope verification, but branding requirements are separate. See LAUNCH.md. The app no longer requests offline access or stores new Google API tokens in launch mode. Old tokens are left intact but cannot be used by the disabled integrations. Production configuration fails early for missing secrets, hostnames or PostgreSQL URL.
 
-When enabling real email, schedule `python manage.py send_pending_reminders` as a recurring worker job (one process per run). The Admin action queues deliveries; it does not send SMTP inside the web request. Console previews are processed immediately. Review failed/uncertain deliveries before any manual requeue.
+Coordinators send task drafts from their own mail app. This workflow requires no mail server or scheduled worker. For deployments using the separate reminder delivery queue, `python manage.py send_pending_reminders` processes queued deliveries. Review failed or uncertain deliveries before manually requeuing them.
 
 WhiteNoise serves collected static assets. Coordinator-uploaded badge icons are resized and stored in PostgreSQL. The bundled badge sheet and favicons ship with the static files. Retain database backups, restrict its network access, and establish monitoring/cost alerts in the actual subscription. Gunicorn access logs omit query strings and referrers to avoid logging OAuth codes. Check Azure platform logs and Application Insights separately for query-string capture before using real accounts.
 
@@ -41,9 +41,9 @@ Migration `0017_fellowship_catalog` replaces the demo badges with the 12 coordin
 
 In **Admin → Badges**, choose a badge and select its artwork, or upload a PNG, JPEG or WebP. An uploaded icon takes priority. In **Admin → Fellows**, open a fellow and mark the appropriate badge **Earned**.
 
-## Email selected fellows
+## Task email drafts
 
-In **Admin → Fellows**, select one or more recipients, then click **Prepare individual assignment drafts** above the list. Review and edit each message, then click **Open in mail app** to send it from your email client. For long drafts or webmail, copy the address, subject, and message into a new email. Drafts use the verified addresses from selected active fellows’ Google sign-ins.
+Open **Admin → Tasks**. With no rows selected, choose **Email about overdue tasks**. Check specific rows to switch to **Email about selected tasks**. Personal work produces one draft per fellow and shared team work produces one draft per cohort. For recipient rules, permissions, editing, and sending, see the [coordinator instructions](OPERATIONS.md#task-email-drafts).
 
 ## Data preservation
 
