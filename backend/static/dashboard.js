@@ -23,16 +23,73 @@ document.addEventListener('DOMContentLoaded', () => {
     notice.addEventListener('focusout', schedule);
     schedule();
   });
-  const { escapeHtml, safeUrl, safeColor, safeIcon, taskIconForeground, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime } = window.UNboundUI;
+  const { escapeHtml, safeUrl, safeColor, safeIcon, taskIconForeground, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime, adjacentAvailabilitySlot } = window.UNboundUI;
 
   /* The portal's CSRF secret belongs to its session, independently of Admin. */
   const csrftoken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  /* ---------- Mobile navigation drawer ---------- */
+  const sidebar = document.getElementById('sidebar');
+  const main = document.querySelector('.main');
+  const menuTrigger = document.querySelector('.mobile-menu-fab');
+  const menuClose = document.querySelector('.sidebar-mobile-close');
+  const menuScrim = document.querySelector('.sidebar-scrim');
+  const mobileLayout = window.matchMedia('(max-width: 900px)');
+
+  function setDrawer(open, returnFocus = false) {
+    const expanded = mobileLayout.matches && open;
+    const wasOpen = sidebar.classList.contains('open');
+    const focusInSidebar = sidebar.contains(document.activeElement);
+    sidebar.classList.toggle('open', expanded);
+    document.body.classList.toggle('mobile-menu-open', expanded);
+    menuTrigger.setAttribute('aria-expanded', String(expanded));
+    menuScrim.hidden = !expanded;
+    if (expanded) {
+      sidebar.inert = false;
+      sidebar.setAttribute('role', 'dialog');
+      sidebar.setAttribute('aria-modal', 'true');
+      sidebar.setAttribute('aria-label', 'Dashboard menu');
+      menuClose.focus();
+    } else {
+      main.inert = false;
+      sidebar.removeAttribute('role');
+      sidebar.removeAttribute('aria-modal');
+      sidebar.removeAttribute('aria-label');
+      if (mobileLayout.matches && (returnFocus || (!wasOpen && focusInSidebar))) menuTrigger.focus();
+      if (!mobileLayout.matches && wasOpen) (sidebar.querySelector('[aria-current]') || sidebar.querySelector('a')).focus();
+      sidebar.inert = mobileLayout.matches;
+    }
+    main.inert = expanded;
+  }
+
+  menuTrigger.addEventListener('click', () => setDrawer(true));
+  menuClose.addEventListener('click', () => setDrawer(false, true));
+  menuScrim.addEventListener('click', () => setDrawer(false, true));
+  mobileLayout.addEventListener('change', () => setDrawer(false));
+  sidebar.addEventListener('keydown', event => {
+    if (!sidebar.classList.contains('open')) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setDrawer(false, true);
+    } else if (event.key === 'Tab') {
+      const controls = Array.from(sidebar.querySelectorAll('a[href], button:not([disabled])'))
+        .filter(control => control.getClientRects().length);
+      const end = event.shiftKey ? controls[0] : controls.at(-1);
+      if (document.activeElement === end) {
+        event.preventDefault();
+        (event.shiftKey ? controls.at(-1) : controls[0]).focus();
+      }
+    }
+  });
+  setDrawer(false);
 
   /* ---------- Persisted dashboard accent ---------- */
   const accentChoices = Array.from(document.querySelectorAll('[data-accent-choice]'));
   const accentStatus = document.getElementById('accentSaveStatus');
   const accentModal = document.getElementById('dashboardPreferencesModal');
   const validAccents = ['ocean', 'sky', 'coral', 'violet', 'mint', 'forest', 'rose', 'amber'];
+  const accentChoiceGroup = document.querySelector('.accent-palette-options');
+  let savingAccent = false;
 
   function setAccentPalette(palette) {
     if (!validAccents.includes(palette)) return;
@@ -42,33 +99,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function closeAccentModal() {
-    if (!accentModal) return;
-    accentModal.classList.remove('active');
-    accentModal.setAttribute('aria-hidden', 'true');
-  }
-
   setAccentPalette(document.body.dataset.accent || 'ocean');
 
   const openAccentButton = document.getElementById('openDashboardPreferences');
   const closeAccentButton = document.getElementById('closeDashboardPreferences');
   if (openAccentButton && accentModal) {
     openAccentButton.addEventListener('click', () => {
-      const sidebar = document.getElementById('sidebar');
-      if (sidebar) sidebar.classList.remove('open');
-      accentModal.classList.add('active');
-      accentModal.setAttribute('aria-hidden', 'false');
+      if (accentModal.open) return;
+      if (mobileLayout.matches) setDrawer(false, true);
+      accentModal.showModal();
+      document.body.classList.add('settings-open');
       const selected = accentModal.querySelector('[aria-pressed="true"]');
       if (selected) selected.focus();
     });
-  }
-  if (closeAccentButton) closeAccentButton.addEventListener('click', closeAccentModal);
-  if (accentModal) {
+    closeAccentButton.addEventListener('click', () => accentModal.close());
     accentModal.addEventListener('click', event => {
-      if (event.target === accentModal) closeAccentModal();
+      if (event.target !== accentModal) return;
+      const bounds = accentModal.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right ||
+          event.clientY < bounds.top || event.clientY > bounds.bottom) accentModal.close();
     });
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && accentModal.classList.contains('active')) closeAccentModal();
+    accentModal.addEventListener('close', () => {
+      document.body.classList.remove('settings-open');
+      (mobileLayout.matches ? menuTrigger : openAccentButton).focus();
     });
   }
 
@@ -76,11 +129,12 @@ document.addEventListener('DOMContentLoaded', () => {
     choice.addEventListener('click', () => {
       const palette = choice.dataset.accentChoice;
       const previousPalette = document.body.dataset.accent || 'ocean';
-      if (!validAccents.includes(palette) || palette === previousPalette) return;
+      if (savingAccent || !validAccents.includes(palette) || palette === previousPalette) return;
 
       setAccentPalette(palette);
       if (accentStatus) accentStatus.textContent = 'Saving your color…';
-      accentChoices.forEach(button => { button.disabled = true; });
+      savingAccent = true;
+      accentChoiceGroup.setAttribute('aria-busy', 'true');
 
       fetch('/api/dashboard/preferences/', {
         method: 'PATCH',
@@ -96,17 +150,38 @@ document.addEventListener('DOMContentLoaded', () => {
           setAccentPalette(previousPalette);
           if (accentStatus) accentStatus.textContent = 'Could not save the color. Your previous choice was restored.';
         })
-        .finally(() => accentChoices.forEach(button => { button.disabled = false; }));
+        .finally(() => {
+          savingAccent = false;
+          accentChoiceGroup.removeAttribute('aria-busy');
+        });
     });
   });
 
   /* ---------- Navigation / View Switcher ---------- */
-  window.showView = function (name) {
+  window.showView = function (name, moveFocus = true) {
     if (!googleIntegrationsEnabled && name === 'calendar') name = 'overview';
-    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
-    document.querySelectorAll('.sb-nav .nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
-    const sb = document.getElementById('sidebar');
-    if (sb) sb.classList.remove('open');
+    const next = document.getElementById('view-' + name);
+    if (!next) return;
+    const changedView = !next.classList.contains('active');
+    setDrawer(false);
+    document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view === next));
+    document.querySelectorAll('.sb-nav [data-view]').forEach(button => {
+      const current = button.dataset.view === name;
+      button.classList.toggle('active', current);
+      if (current) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    if (moveFocus) {
+      if (changedView) {
+        if (mobileLayout.matches) window.scrollTo(0, 0);
+        else main.scrollTop = 0;
+      }
+      const heading = next.querySelector('h1');
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus({ preventScroll: true });
+      }
+    }
 
     if (name === 'overview') {
       refreshWorkspace();
@@ -1013,7 +1088,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let availabilityConflictCache = { key: null, events: [] };
   let availabilityConflictPending = null;
   let userSlotsMap = {};
-  let isMouseDown = false;
+  let paintingAvailability = false;
+  let skipMouseClick = false;
   let dragTargetState = null;
   let availabilitySaveQueue = Promise.resolve();
   let availabilityEditVersion = 0;
@@ -1265,13 +1341,16 @@ document.addEventListener('DOMContentLoaded', () => {
     gridEl.innerHTML = renderAvailabilityWeeks(dates, startH, endH, (date, hour) => {
       const slotKey = date.date ? `${date.date}_${hour}` : `${date.dayOfWeek}_${hour}`;
       const isAvail = !!userSlotsMap[slotKey];
+      const day = dates.indexOf(date);
+      const localHour = date.hours?.[hour - startH] || `${hour}:00`;
+      const label = `${date.dayName}, ${date.monthName} ${date.dayNum}, ${localHour}`;
       return `
-        <div class="grid-cell ${isAvail ? 'active' : ''} ${date.isToday ? 'today-cell' : ''}"
-             data-date="${escapeHtml(date.date || '')}" data-day="${escapeHtml(date.dayOfWeek)}" data-hour="${hour}"></div>
+        <button type="button" class="grid-cell ${isAvail ? 'active' : ''} ${date.isToday ? 'today-cell' : ''}"
+                data-slot data-day-index="${day}" data-slot-label="${escapeHtml(label)}"
+                data-date="${escapeHtml(date.date || '')}" data-day="${escapeHtml(date.dayOfWeek)}" data-hour="${hour}"
+                aria-label="${escapeHtml(label)}" aria-pressed="${isAvail}" tabindex="${day === 0 && hour === startH ? 0 : -1}"></button>
       `;
     });
-
-    attachGridEvents();
     loadAvailabilityConflictEvents(dates);
   }
 
@@ -1344,10 +1423,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (conflicts.length) {
         const titles = [...new Set(conflicts.map(event => event.summary || 'Calendar event'))];
         cell.title = `Calendar conflict: ${titles.join('; ')}`;
-        cell.setAttribute('aria-label', `Availability slot ${cell.dataset.date} at ${cell.dataset.hour}:00 conflicts with ${titles.join(', ')}`);
+        cell.setAttribute('aria-label', `${cell.dataset.slotLabel}. Conflicts with ${titles.join(', ')}`);
       } else {
         cell.removeAttribute('title');
-        cell.removeAttribute('aria-label');
+        cell.setAttribute('aria-label', cell.dataset.slotLabel);
       }
     });
   }
@@ -1397,48 +1476,68 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function attachGridEvents() {
-    const cells = document.querySelectorAll('#myAvailabilityGrid .grid-cell');
+  const availabilityGrid = document.getElementById('myAvailabilityGrid');
 
-    cells.forEach(cell => {
-      cell.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isMouseDown = true;
-        const date = cell.dataset.date;
-        const day = cell.dataset.day;
-        const hour = cell.dataset.hour;
-        const currentState = cell.classList.contains('active');
-        dragTargetState = !currentState;
-        toggleCellState(cell, date, day, hour, dragTargetState);
-      });
-
-      cell.addEventListener('mouseenter', () => {
-        if (isMouseDown) {
-          const date = cell.dataset.date;
-          const day = cell.dataset.day;
-          const hour = cell.dataset.hour;
-          toggleCellState(cell, date, day, hour, dragTargetState);
-        }
-      });
-    });
-
-    window.addEventListener('mouseup', () => {
-      if (isMouseDown) {
-        isMouseDown = false;
-        saveUserAvailability();
-      }
-    });
+  function setSlotTabStop(cell) {
+    const previous = availabilityGrid.querySelector('[data-slot][tabindex="0"]');
+    if (previous && previous !== cell) previous.tabIndex = -1;
+    cell.tabIndex = 0;
   }
 
-  function toggleCellState(cell, date, day, hour, newState) {
+  function toggleCellState(cell, newState) {
+    if ((cell.getAttribute('aria-pressed') === 'true') === newState) return;
+    const { date, day, hour } = cell.dataset;
     availabilityEditVersion++;
     cell.classList.toggle('active', newState);
-    if (date) {
-      userSlotsMap[`${date}_${hour}`] = newState;
-    } else {
-      userSlotsMap[`${day}_${hour}`] = newState;
-    }
+    cell.setAttribute('aria-pressed', String(newState));
+    userSlotsMap[`${date || day}_${hour}`] = newState;
   }
+
+  availabilityGrid.addEventListener('focusin', event => {
+    if (event.target.matches('[data-slot]')) setSlotTabStop(event.target);
+  });
+  availabilityGrid.addEventListener('keydown', event => {
+    const cell = event.target.closest('[data-slot]');
+    if (!cell) return;
+    const dates = currentDates.length ? currentDates : getFallbackWeekDayDates();
+    const target = adjacentAvailabilitySlot(
+      event.key, Number(cell.dataset.dayIndex), Number(cell.dataset.hour),
+      dates.length, currentStartHour ?? 9, currentEndHour ?? 18
+    );
+    if (!target) return;
+    event.preventDefault();
+    availabilityGrid.querySelector(
+      `[data-slot][data-day-index="${target.day}"][data-hour="${target.hour}"]`
+    )?.focus();
+  });
+  availabilityGrid.addEventListener('pointerdown', event => {
+    skipMouseClick = false;
+    const cell = event.target.closest('[data-slot]');
+    if (!cell || event.pointerType !== 'mouse' || event.button !== 0) return;
+    paintingAvailability = true;
+    skipMouseClick = true;
+    dragTargetState = cell.getAttribute('aria-pressed') !== 'true';
+    toggleCellState(cell, dragTargetState);
+  });
+  availabilityGrid.addEventListener('pointerover', event => {
+    const cell = event.target.closest('[data-slot]');
+    if (paintingAvailability && cell && event.pointerType === 'mouse') toggleCellState(cell, dragTargetState);
+  });
+  availabilityGrid.addEventListener('click', event => {
+    const cell = event.target.closest('[data-slot]');
+    // Mouse clicks were handled during drag. Keyboard and touch use native activation.
+    if (!cell || (event.detail > 0 && skipMouseClick)) return;
+    setSlotTabStop(cell);
+    toggleCellState(cell, cell.getAttribute('aria-pressed') !== 'true');
+    saveUserAvailability();
+  });
+  function finishAvailabilityStroke() {
+    if (!paintingAvailability) return;
+    paintingAvailability = false;
+    saveUserAvailability();
+  }
+  window.addEventListener('pointerup', finishAvailabilityStroke);
+  window.addEventListener('pointercancel', finishAvailabilityStroke);
 
   function saveUserAvailability(showToast = false) {
     if (!currentRequestId || availabilityLoadedFor !== currentRequestId) return;
@@ -1688,7 +1787,10 @@ document.addEventListener('DOMContentLoaded', () => {
           if (subEl) subEl.textContent = `You've earned ${data.earned_count} badges and ${data.xp_points} XP. Complete milestones to unlock new ranks.`;
 
           const pct = data.total_count > 0 ? Math.round((data.earned_count / data.total_count) * 100) : 0;
-          if (fillEl) fillEl.style.width = `${pct}%`;
+          if (fillEl) {
+            fillEl.style.width = `${pct}%`;
+            document.getElementById('milestoneProgress').setAttribute('aria-valuenow', String(pct));
+          }
 
           if (!data.badges || data.badges.length === 0) {
             gridEl.innerHTML = `<div class="empty-state">No milestones found.</div>`;
@@ -1767,7 +1869,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* Initial Load on Page Startup */
   if (document.getElementById('view-drive')?.classList.contains('active')) {
-    window.showView('drive');
+    window.showView('drive', false);
   } else {
     refreshWorkspace();
   }

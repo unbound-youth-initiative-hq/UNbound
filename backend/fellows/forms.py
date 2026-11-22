@@ -109,7 +109,10 @@ class DrivePinForm(forms.ModelForm):
 class SharedDriveResourceForm(forms.ModelForm):
     class Meta:
         model = SharedDriveResource
-        fields = ['title', 'url', 'description', 'audience', 'cohorts', 'is_published']
+        fields = [
+            'title', 'url', 'description', 'resource_type_override', 'resource_icon_override',
+            'audience', 'cohorts', 'is_published',
+        ]
 
     def clean(self):
         cleaned = super().clean()

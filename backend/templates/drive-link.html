@@ -1,21 +1,6 @@
-{% with kind=link.kind %}
 <li class="file-item drive-resource">
   <a class="file-info" href="{{ link.url }}" target="_blank" rel="noopener noreferrer">
-    {% if kind == 'Folder' %}
-      <i class="fa-solid fa-folder file-folder" aria-hidden="true"></i>
-    {% elif kind == 'File' %}
-      <i class="fa-regular fa-file file-doc" aria-hidden="true"></i>
-    {% elif kind == 'Form' %}
-      <i class="fa-solid fa-list-check file-doc" aria-hidden="true"></i>
-    {% else %}
-      <i class="fa-solid fa-link file-generic" aria-hidden="true"></i>
-    {% endif %}
-    <span class="file-text">
-      <span class="file-name">{{ link.title }}</span>
-      <span class="file-meta">{{ kind }}</span>
-      {% if link.description %}<span class="file-meta">{{ link.description }}</span>{% endif %}
-    </span>
-    <i class="fa-solid fa-arrow-up-right-from-square drive-open-icon" aria-hidden="true"></i>
+    {% include 'resource-card-content.html' with link=link only %}
   </a>
   {% if link.pinned_by_id == fellow_id %}
     <form method="post" action="{% url 'remove-drive-pin' link.pk %}">
@@ -24,4 +9,3 @@
     </form>
   {% endif %}
 </li>
-{% endwith %}

@@ -1,0 +1,7 @@
+<i class="{{ link.resource_icon_class }}" aria-hidden="true" data-resource-icon></i>
+<span class="file-text">
+  <span class="file-name" data-resource-name>{% if preview %}{{ link.title|default:'Resource title' }}{% else %}{{ link.title }}{% endif %}</span>
+  <span class="file-meta" data-resource-type>{{ link.kind }}</span>
+  <span class="file-meta" data-resource-description{% if not link.description %} hidden{% endif %}>{{ link.description }}</span>
+</span>
+<i class="fa-solid fa-arrow-up-right-from-square drive-open-icon" aria-hidden="true"></i>

@@ -14,7 +14,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400..800&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="{% static 'badge-art.css' %}" />
-  <link rel="stylesheet" href="{% static 'dashboard.css' %}?v=20261121-meeting-updates" />
+  <link rel="stylesheet" href="{% static 'resource-cards.css' %}" />
+  <link rel="stylesheet" href="{% static 'dashboard.css' %}" />
 </head>
 <body data-google-integrations-enabled="{{ google_integrations_enabled|yesno:'true,false' }}" data-google-connect-url="{% provider_login_url 'google' process='connect' next='/dashboard/' %}" data-accent="{{ accent_palette|default:'ocean' }}">
   <aside class="sidebar" id="sidebar">
@@ -22,11 +23,14 @@
       <img src="{% static 'logo.png' %}" alt="UNbound" onerror="this.style.display='none'" />
       <span class="wm">UNbound</span>
     </a>
+    <button class="sidebar-mobile-close" type="button" aria-label="Close menu">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
     <nav class="sb-nav" id="sbNav" aria-label="Dashboard">
-      <button class="nav-item{% if not drive_active %} active{% endif %}" type="button" data-view="overview" onclick="showView('overview')">
-        <i class="fa-solid fa-house"></i> Workspace
+      <button class="nav-item{% if not drive_active %} active{% endif %}" type="button" data-view="overview"{% if not drive_active %} aria-current="page"{% endif %} onclick="showView('overview')">
+        <i class="fa-solid fa-house" aria-hidden="true"></i> Mission Control
       </button>
-      <button class="nav-item{% if drive_active %} active{% endif %}" type="button" data-view="drive" onclick="showView('drive')">
+      <button class="nav-item{% if drive_active %} active{% endif %}" type="button" data-view="drive"{% if drive_active %} aria-current="page"{% endif %} onclick="showView('drive')">
         <i class="fa-solid fa-folder-open"></i> Resources
       </button>
       <button class="nav-item" type="button" data-view="tasks" onclick="showView('tasks')">
@@ -36,15 +40,12 @@
         <i class="fa-solid fa-calendar-check"></i> Meeting Hub
       </button>
       <button class="nav-item" type="button" data-view="badges" onclick="showView('badges')">
-        <i class="fa-solid fa-award"></i> Milestones & Achievements
+        <i class="fa-solid fa-award" aria-hidden="true"></i> Milestones
       </button>
-      <button class="nav-item nav-preferences" type="button" id="openDashboardPreferences" aria-label="Customize dashboard colors" aria-haspopup="dialog" aria-controls="dashboardPreferencesModal" title="Customize dashboard colors">
+      <button class="nav-item nav-preferences" type="button" id="openDashboardPreferences" aria-haspopup="dialog" aria-controls="dashboardPreferencesModal">
         <i class="fa-solid fa-sliders"></i> Settings & Personalization
       </button>
     </nav>
-    <button class="sidebar-mobile-close" type="button" aria-label="Close menu" onclick="document.getElementById('sidebar').classList.remove('open')">
-      <i class="fa-solid fa-xmark"></i>
-    </button>
     <div class="sb-foot">
       {% if not google_account.connected %}
         <a class="sb-logout" href="{% provider_login_url 'google' process='connect' next='/dashboard/' %}"><i class="fa-brands fa-google"></i> Connect Google to this account</a>
@@ -64,9 +65,10 @@
       </form>
     </div>
   </aside>
+  <div class="sidebar-scrim" aria-hidden="true" hidden></div>
 
   <main class="main">
-    <button class="mobile-menu-fab" type="button" aria-label="Open menu" aria-controls="sidebar" onclick="document.getElementById('sidebar').classList.add('open')">
+    <button class="mobile-menu-fab" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
       <i class="fa-solid fa-bars"></i>
     </button>
 
@@ -82,7 +84,7 @@
         <!-- Hero Welcome Header -->
         <div class="dash-welcome-row">
           <div>
-            <div class="eyebrow">Fellow dashboard</div>
+            <div class="eyebrow">Mission Control</div>
             <h1 class="welcome-title">Welcome back, <span id="dashFirstName">Fellow</span> 👋</h1>
             <div class="dash-sub-line">
               <span id="dashCohortName">Loading cohort…</span> · <strong id="dashCurrentPhase">Loading…</strong>
@@ -105,7 +107,6 @@
             <div class="dash-stat-icon icon-green"><i class="fa-solid fa-check"></i></div>
             <div class="dash-stat-label">Completed</div>
             <div class="dash-stat-value" id="dashCompletedTasks">0</div>
-            <div class="dash-stat-sub">keep the momentum</div>
           </div>
 
           <div class="dash-stat-card">
@@ -486,14 +487,14 @@
             <div class="meeting-col-header">
               <div>
                 <h3 id="myAvailabilityTitle">My Availability</h3>
-                <div class="meeting-col-sub">Click & drag to toggle — saved instantly</div>
+                <p class="meeting-col-sub" id="availabilityInstructions">Tap or drag to select. With a keyboard, use the arrow keys to move and Space to select.</p>
                 {% if google_integrations_enabled %}
                 <div class="calendar-conflict-note"><span class="calendar-conflict-swatch"></span> Yellow outline means a Google Calendar conflict</div>
                 <div class="calendar-conflict-status" id="calendarConflictStatus" role="status" aria-live="polite"></div>
                 {% endif %}
               </div>
               <div class="meeting-col-actions">
-                <span class="w2m-save-toast" id="w2mSaveToast" style="display: none;"><i class="fa-solid fa-circle-check"></i> Saved</span>
+                <span class="w2m-save-toast" id="w2mSaveToast" role="status" style="display: none;"></span>
                 <button class="btn btn-sm btn-ghost" id="btnClearMyAvailability" title="Clear all my slots">
                   <i class="fa-solid fa-eraser"></i> Clear
                 </button>
@@ -504,7 +505,7 @@
             </div>
 
             <div class="grid-table-wrapper">
-              <div class="availability-grid" id="myAvailabilityGrid">
+              <div class="availability-grid" id="myAvailabilityGrid" role="group" aria-labelledby="myAvailabilityTitle" aria-describedby="availabilityInstructions">
                 <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading availability grid...</div>
               </div>
             </div>
@@ -558,9 +559,7 @@
       <section class="view" id="view-badges">
         <div class="page-head">
           <div>
-            <div class="eyebrow">PROGRESS</div>
-            <h1>Milestones & Achievements</h1>
-            <div class="sub">Earn badges as you move through the Fellowship</div>
+            <h1>Milestones</h1>
           </div>
         </div>
 
@@ -573,7 +572,7 @@
           <div class="banner-info">
             <h2 id="bannerLevelTitle">Pioneer • Level 1</h2>
             <p id="bannerLevelSub">Coordinators award badges for fellowship milestones.</p>
-            <div class="banner-progress-track">
+            <div class="banner-progress-track" id="milestoneProgress" role="progressbar" aria-label="Milestone progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <div class="banner-progress-fill" id="bannerProgressFill" style="width: 0%;"></div>
             </div>
           </div>
@@ -602,17 +601,16 @@
   </dialog>
 
   <!-- DASHBOARD PERSONALIZATION -->
-  <div class="modal-overlay" id="dashboardPreferencesModal" aria-hidden="true">
-    <section class="modal-box preferences-modal" role="dialog" aria-modal="true" aria-labelledby="preferencesTitle">
+  <dialog class="modal-box preferences-modal" id="dashboardPreferencesModal" aria-labelledby="preferencesTitle">
       <div class="modal-header">
         <div>
-          <div class="eyebrow">YOUR WORKSPACE</div>
-          <h3 id="preferencesTitle">Personalize your dashboard</h3>
+          <h2 id="preferencesTitle">Settings &amp; Personalization</h2>
         </div>
         <button class="btn-icon" type="button" id="closeDashboardPreferences" aria-label="Close preferences">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="accent-palette-options" role="group" aria-label="Accent color">
+        <h3 id="accentHeading" class="preferences-legend">Accent color</h3>
+        <div class="accent-palette-options" role="group" aria-labelledby="accentHeading">
           <button class="accent-choice" type="button" data-accent-choice="ocean" aria-pressed="false"><span class="accent-swatch swatch-ocean"></span><span>Ocean</span></button>
           <button class="accent-choice" type="button" data-accent-choice="sky" aria-pressed="false"><span class="accent-swatch swatch-sky"></span><span>Sky</span></button>
           <button class="accent-choice" type="button" data-accent-choice="coral" aria-pressed="false"><span class="accent-swatch swatch-coral"></span><span>Coral</span></button>
@@ -631,8 +629,7 @@
           <p class="preference-save-status" id="settingsTimezoneStatus" role="status">Used for confirmed meetings and availability.</p>
         </div>
       </div>
-    </section>
-  </div>
+  </dialog>
 
   {% if google_integrations_enabled %}
   <!-- FOLDER SELECTION MODAL -->
@@ -697,7 +694,7 @@
     </div>
   </div>
 
-  <script src="{% static 'dashboard-utils.js' %}?v=20261121-meeting-updates"></script>
-  <script src="{% static 'dashboard.js' %}?v=20261121-meeting-updates"></script>
+  <script src="{% static 'dashboard-utils.js' %}"></script>
+  <script src="{% static 'dashboard.js' %}"></script>
 </body>
 </html>

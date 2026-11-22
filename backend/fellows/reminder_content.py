@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date, timedelta
+from urllib.parse import quote, urlencode
 
 from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
@@ -8,7 +9,7 @@ from django.core.validators import validate_email
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import Task, availability_task_visibility_filter
+from .models import Fellow, Task, availability_task_visibility_filter
 
 
 def verified_google_addresses(selected):
@@ -58,21 +59,23 @@ def pending_task_sort_key(task):
 
 
 def pending_tasks_email(fellow, tasks, *, now=None):
-    now = now or timezone.localtime()
-    today = now.date()
-    due_soon = today + timedelta(days=2)
-
     full_name = fellow.user.get_full_name().strip()
     first_name = fellow.user.first_name.strip() or (full_name.split()[0] if full_name else "")
     if not first_name:
         first_name = fellow.user.email.partition("@")[0] or fellow.user.username or "there"
+    return assignment_check_in(first_name, tasks, now=now)
 
+
+def assignment_check_in(recipient, tasks, *, now=None, assignment='assignment'):
+    now = now or timezone.localtime()
+    today = now.date()
+    due_soon = today + timedelta(days=2)
     site_base = getattr(settings, "SITE_BASE_URL", "").rstrip("/")
     dashboard_url = f"{site_base}/dashboard/" if site_base else "/dashboard/"
     lines = [
-        f"Hi {first_name},",
+        f"Hi {recipient},",
         "",
-        (f"You have {len(tasks)} incomplete assignment{'s' if len(tasks) != 1 else ''}."
+        (f"You have {len(tasks)} incomplete {assignment}{'s' if len(tasks) != 1 else ''}."
          if tasks else "You're caught up with your UNbound assignments."),
         "",
     ]
@@ -103,30 +106,73 @@ def pending_tasks_email(fellow, tasks, *, now=None):
     return "\n".join(lines)
 
 
-def pending_tasks_for_selection(fellows):
-    """One task query for the batch, with personal and cohort visibility per fellow."""
-    profiles = {fellow.pk: fellow for fellow in fellows}
-    cohort_members = defaultdict(set)
-    for fellow in fellows:
-        if fellow.cohort_id is not None:
-            cohort_members[fellow.cohort_id].add(fellow.pk)
-    tasks = Task.objects.filter(
-        Q(assigned_to_id__in=profiles) | Q(scope=Task.Scope.TEAM, cohort_id__in=cohort_members),
+def incomplete_reminder_tasks(queryset):
+    return queryset.filter(
+        Q(availability_request__isnull=True) | Q(availability_request__is_active=True),
         status__in=[Task.Status.PENDING, Task.Status.IN_PROGRESS],
-    ).select_related('availability_request')
-    result = {fellow.pk: [] for fellow in fellows}
+    )
+
+
+def make_draft(label, addresses, subject, body):
+    recipients = list({address.casefold(): address for address in addresses}.values())
+    encoded_recipients = ','.join(quote(address, safe='@') for address in recipients)
+    message = body.replace('\r\n', '\n').replace('\n', '\r\n')
+    return {
+        'label': label,
+        'address': ', '.join(recipients),
+        'subject': subject,
+        'body': body,
+        'mailto': f'mailto:{encoded_recipients}?' + urlencode({'subject': subject, 'body': message}, quote_via=quote),
+    }
+
+
+def task_reminder_drafts(queryset, *, now):
+    """Group incomplete personal tasks by assignee and team tasks by cohort."""
+    personal_tasks = defaultdict(list)
+    team_tasks = defaultdict(list)
+    tasks = queryset.select_related('assigned_to', 'cohort', 'availability_request')
     for task in sorted(tasks, key=pending_task_sort_key):
-        recipients = cohort_members[task.cohort_id].copy() if task.scope == Task.Scope.TEAM else set()
-        if task.assigned_to_id in profiles:
-            recipients.add(task.assigned_to_id)
+        team = task.scope == Task.Scope.TEAM
+        recipient_id = task.cohort_id if team else task.assigned_to_id
+        if recipient_id is None:
+            continue
+        cohort_id = task.cohort_id if team else task.assigned_to.cohort_id
         poll = task.availability_request
-        for fellow_id in recipients:
-            if poll and not (
-                poll.is_active and (
-                    poll.assign_to_all or poll.cohort_id is None
-                    or poll.cohort_id == profiles[fellow_id].cohort_id
-                )
-            ):
-                continue
-            result[fellow_id].append(task)
-    return result
+        if poll and not poll.assign_to_all and poll.cohort_id not in (None, cohort_id):
+            continue
+        (team_tasks if team else personal_tasks)[recipient_id].append(task)
+
+    fellows = Fellow.objects.filter(
+        Q(pk__in=personal_tasks) | Q(cohort_id__in=team_tasks),
+        role=Fellow.Role.FELLOW,
+        user__is_active=True,
+    ).select_related('user').order_by('user__last_name', 'user__first_name', 'pk')
+    addresses = verified_google_addresses(fellows)
+    cohort_addresses = defaultdict(list)
+    drafts = []
+    skipped = 0
+    for fellow in fellows:
+        address = addresses.get(fellow.user_id)
+        if not address:
+            skipped += 1
+            continue
+        if fellow.pk in personal_tasks:
+            drafts.append(make_draft(
+                fellow.user.get_full_name() or fellow.user.username,
+                [address],
+                'Your UNbound assignment check-in',
+                pending_tasks_email(fellow, personal_tasks[fellow.pk], now=now),
+            ))
+        if fellow.cohort_id in team_tasks:
+            cohort_addresses[fellow.cohort_id].append(address)
+
+    for cohort_id, tasks in team_tasks.items():
+        recipients = cohort_addresses[cohort_id]
+        if recipients:
+            cohort = tasks[0].cohort.name
+            drafts.append(make_draft(
+                f'{cohort} cohort', recipients,
+                f'UNbound team assignment check-in for {cohort}',
+                assignment_check_in(f'{cohort} cohort', tasks, now=now, assignment='team assignment'),
+            ))
+    return drafts, skipped

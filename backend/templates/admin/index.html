@@ -1,49 +1,75 @@
 {% extends "admin/index.html" %}
-{% load coordinator %}
+{% load coordinator static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'coordinator-home.css' %}">
+{% endblock %}
+
 {% block content %}
 {% coordinator_counts request.user as counts %}
-<div class="module" style="padding:16px;margin-bottom:20px">
-  <h2>Coordinator workspace</h2>
-  {% with p=perms.fellows %}
-    {% if p.view_task or p.change_task or p.add_task %}
-      <h3>Assignments</h3>
-      <ul>
-        {% if p.add_task %}<li><a href="{% url 'admin:fellows_task_assign' %}">Assign work</a></li>{% endif %}
-        {% if p.view_task or p.change_task %}
-          <li><a href="{% url 'admin:fellows_task_changelist' %}?deadline=overdue">{{ counts.overdue }} overdue assignment{{ counts.overdue|pluralize }}</a></li>
-        {% endif %}
-      </ul>
+{% with p=perms.fellows %}
+<section class="coordinator-home" aria-labelledby="coordinator-heading">
+  <h2 id="coordinator-heading">Coordinator workspace</h2>
+  {% if p.view_task or p.change_task or p.view_availabilityrequest or p.change_availabilityrequest %}
+    <div class="coordinator-overview">
+      {% if p.view_task or p.change_task %}
+        <a class="coordinator-summary" href="{% url 'admin:fellows_task_changelist' %}?deadline=overdue">
+          <strong>{{ counts.overdue }}</strong><span>Overdue assignments</span>
+        </a>
+      {% endif %}
+      {% if p.view_availabilityrequest or p.change_availabilityrequest %}
+        <a class="coordinator-summary" href="{% url 'admin:fellows_availabilityrequest_changelist' %}?is_active__exact=1">
+          <strong>{{ counts.open_polls }}</strong><span>Active WhenBound polls</span>
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+  <div class="coordinator-groups">
+    {% if p.add_task or p.view_task or p.change_task %}
+      <section class="coordinator-card">
+        <h3>Assignments</h3>
+        <ul>
+          {% if p.add_task %}<li><a href="{% url 'admin:fellows_task_assign' %}">Assign work</a></li>{% endif %}
+          {% if p.view_task or p.change_task %}<li><a href="{% url 'admin:fellows_task_changelist' %}">Manage assignments{% if p.change_fellow %} and email drafts{% endif %}</a></li>{% endif %}
+        </ul>
+      </section>
     {% endif %}
     {% if p.add_availabilityrequest or p.view_availabilityrequest or p.change_availabilityrequest or p.view_confirmedmeeting or p.add_confirmedmeeting %}
-      <h3>Scheduling</h3>
-      <ul>
-        {% if p.add_availabilityrequest %}<li><a href="{% url 'admin:fellows_availabilityrequest_add' %}">Open a WhenBound poll</a></li>{% endif %}
-        {% if p.view_availabilityrequest or p.change_availabilityrequest %}
-          <li><a href="{% url 'admin:fellows_availabilityrequest_changelist' %}?is_active__exact=1">{{ counts.open_polls }} active WhenBound poll{{ counts.open_polls|pluralize }}</a></li>
-        {% endif %}
-        {% if p.add_confirmedmeeting %}<li><a href="{% url 'admin:fellows_confirmedmeeting_add' %}">Publish a confirmed meeting</a></li>{% endif %}
-        {% if p.view_confirmedmeeting %}<li><a href="{% url 'admin:fellows_confirmedmeeting_changelist' %}">Confirmed meetings</a></li>{% endif %}
-      </ul>
+      <section class="coordinator-card">
+        <h3>Scheduling</h3>
+        <ul>
+          {% if p.add_availabilityrequest %}<li><a href="{% url 'admin:fellows_availabilityrequest_add' %}">Open a WhenBound poll</a></li>{% endif %}
+          {% if p.view_availabilityrequest or p.change_availabilityrequest %}<li><a href="{% url 'admin:fellows_availabilityrequest_changelist' %}">Manage WhenBound polls</a></li>{% endif %}
+          {% if p.add_confirmedmeeting %}<li><a href="{% url 'admin:fellows_confirmedmeeting_add' %}">Publish a confirmed meeting</a></li>{% endif %}
+          {% if p.view_confirmedmeeting %}<li><a href="{% url 'admin:fellows_confirmedmeeting_changelist' %}">Confirmed meetings</a></li>{% endif %}
+        </ul>
+      </section>
     {% endif %}
     {% if p.view_fellow or p.change_fellow or p.view_cohort or p.add_invitecode %}
-      <h3>Fellows and cohorts</h3>
-      <ul>
-        {% if p.view_fellow or p.change_fellow %}<li><a href="{% url 'admin:fellows_fellow_changelist' %}">Fellows, email drafts and awards</a></li>{% endif %}
-        {% if p.view_cohort %}<li><a href="{% url 'admin:fellows_cohort_changelist' %}">Cohort projects and phases</a></li>{% endif %}
-        {% if p.add_invitecode %}<li><a href="{% url 'admin:fellows_invitecode_generate' %}">Generate invitations</a></li>{% endif %}
-      </ul>
+      <section class="coordinator-card">
+        <h3>Fellows and cohorts</h3>
+        <ul>
+          {% if p.view_fellow or p.change_fellow %}<li><a href="{% url 'admin:fellows_fellow_changelist' %}">Fellows and awards</a></li>{% endif %}
+          {% if p.view_cohort %}<li><a href="{% url 'admin:fellows_cohort_changelist' %}">Cohort projects and phases</a></li>{% endif %}
+          {% if p.add_invitecode %}<li><a href="{% url 'admin:fellows_invitecode_generate' %}">Generate invitations</a></li>{% endif %}
+        </ul>
+      </section>
     {% endif %}
     {% if p.add_shareddriveresource or p.view_shareddriveresource or p.view_cohort %}
-      <h3>Resources</h3>
-      <ul>
-        {% if p.add_shareddriveresource %}<li><a href="{% url 'admin:fellows_shareddriveresource_add' %}">Publish a resource</a></li>{% endif %}
-        {% if p.view_shareddriveresource %}<li><a href="{% url 'admin:fellows_shareddriveresource_changelist' %}">Manage resources</a></li>{% endif %}
-        {% if p.view_cohort %}<li><a href="{% url 'admin:fellows_cohort_changelist' %}">Manage cohort resources and pins</a></li>{% endif %}
-      </ul>
+      <section class="coordinator-card">
+        <h3>Resources</h3>
+        <ul>
+          {% if p.add_shareddriveresource %}<li><a href="{% url 'admin:fellows_shareddriveresource_add' %}">Publish a resource</a></li>{% endif %}
+          {% if p.view_shareddriveresource %}<li><a href="{% url 'admin:fellows_shareddriveresource_changelist' %}">Manage resources</a></li>{% endif %}
+          {% if p.view_cohort %}<li><a href="{% url 'admin:fellows_cohort_changelist' %}">Manage cohort resources and pins</a></li>{% endif %}
+        </ul>
+      </section>
     {% endif %}
-  {% endwith %}
-</div>
-<details>
+  </div>
+</section>
+{% endwith %}
+<details class="coordinator-records">
   <summary>Program setup and all records</summary>
   {{ block.super }}
 </details>

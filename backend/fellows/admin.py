@@ -1,15 +1,17 @@
 from base64 import b64encode
 from uuid import UUID
-from urllib.parse import quote, urlencode
 
 
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
+from django.contrib.admin.options import IncorrectLookupParameters
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpResponseForbidden, HttpResponseNotAllowed
 from django.shortcuts import redirect, render
+from django.template.loader import render_to_string
 from django.urls import path
 from django.utils import timezone
 from django.utils.html import format_html
@@ -20,10 +22,11 @@ from .models import (
     Chapter, Cohort, CohortDriveLink, ConfirmedMeeting, SharedDriveResource, SDG, Fellow, Task, MeetingAvailability, Badge, FellowBadge,
     InviteCode, AvailabilityRequest, Phase, ReminderBatch, ReminderDelivery,
 )
+from .resource_appearance import RESOURCE_PREVIEW_OPTIONS
 
 
 from .reminder_content import (
-    pending_tasks_email, pending_tasks_for_fellow, pending_tasks_for_selection, verified_google_addresses,
+    incomplete_reminder_tasks, pending_tasks_email, pending_tasks_for_fellow, task_reminder_drafts,
 )
 
 
@@ -52,10 +55,29 @@ class SDGAdmin(admin.ModelAdmin):
     search_fields = ['name', 'code']
 
 
-class CohortDriveLinkInline(admin.TabularInline):
+class ResourceAppearanceAdmin:
+    class Media:
+        css = {'all': (
+            'https://fonts.googleapis.com/css2?family=Montserrat:wght@400..800&display=swap',
+            'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
+            'resource-cards.css',
+        )}
+        js = ('resource-preview.js',)
+
+    @admin.display(description='Fellow dashboard preview')
+    def resource_preview(self, resource):
+        return render_to_string('admin/fellows/resource_preview.html', {
+            'link': resource, 'options': RESOURCE_PREVIEW_OPTIONS,
+        })
+
+
+class CohortDriveLinkInline(ResourceAppearanceAdmin, admin.StackedInline):
     model = CohortDriveLink
-    fields = ['title', 'url', 'description', 'is_published', 'pinned_by']
-    readonly_fields = ['pinned_by']
+    fields = [
+        'title', 'url', 'description', ('resource_type_override', 'resource_icon_override'),
+        'resource_preview', ('is_published', 'pinned_by'),
+    ]
+    readonly_fields = ['resource_preview', 'pinned_by']
     extra = 0
 
     def get_queryset(self, request):
@@ -81,14 +103,16 @@ class CohortAdmin(admin.ModelAdmin):
 
 
 @admin.register(SharedDriveResource)
-class SharedDriveResourceAdmin(admin.ModelAdmin):
+class SharedDriveResourceAdmin(ResourceAppearanceAdmin, admin.ModelAdmin):
     form = SharedDriveResourceForm
+    readonly_fields = ['resource_preview']
     list_display = ['title', 'audience', 'is_published']
     list_filter = ['audience', 'is_published', 'cohorts']
     filter_horizontal = ['cohorts']
     search_fields = ['title', 'description', 'url']
     fieldsets = [
         ('Resource', {'fields': ('title', 'url', 'description')}),
+        ('Appearance', {'fields': (('resource_type_override', 'resource_icon_override'), 'resource_preview')}),
         ('Audience and publication', {'fields': ('audience', 'cohorts', 'is_published')}),
     ]
 
@@ -207,7 +231,6 @@ class FellowAdmin(admin.ModelAdmin):
     list_filter = ['role', 'chapter', 'cohort']
     search_fields = ['user__first_name', 'user__last_name', 'user__email']
     inlines = [FellowBadgeInline]
-    actions = ['prepare_individual_drafts']
     autocomplete_fields = ['user', 'chapter', 'cohort']
     list_select_related = ['user', 'chapter', 'cohort__phase']
     readonly_fields = ['xp_points', 'get_current_phase']
@@ -232,31 +255,6 @@ class FellowAdmin(admin.ModelAdmin):
         return self.has_change_permission(request) and (
             request.user.has_perm('fellows.view_task') or request.user.has_perm('fellows.change_task')
         )
-
-    @admin.action(permissions=['prepare_drafts'], description='Prepare individual assignment drafts')
-    def prepare_individual_drafts(self, request, queryset):
-        selected = queryset.filter(role=Fellow.Role.FELLOW, user__is_active=True)
-        addresses = verified_google_addresses(selected)
-        fellows = list(selected.filter(user_id__in=addresses).select_related('user'))
-        pending = pending_tasks_for_selection(fellows)
-        now = timezone.localtime()
-        subject = 'Your UNbound assignment check-in'
-        drafts = []
-        for fellow in fellows:
-            address = addresses[fellow.user_id]
-            body = pending_tasks_email(fellow, pending[fellow.pk], now=now)
-            mailto = 'mailto:' + quote(address, safe='@') + '?' + urlencode(
-                {'subject': subject, 'body': body}, quote_via=quote,
-            )
-            drafts.append({
-                'fellow': fellow, 'address': address, 'subject': subject, 'body': body,
-                'mailto': mailto,
-            })
-        return render(request, 'admin/fellows/fellow/individual_drafts.html', {
-            **self.admin_site.each_context(request), 'opts': self.model._meta,
-            'title': 'Individual assignment drafts', 'drafts': drafts,
-            'skipped': queryset.count() - len(fellows),
-        })
 
     @admin.display(description='Current Phase')
     def get_current_phase(self, obj):
@@ -341,10 +339,9 @@ class OverdueTaskFilter(admin.SimpleListFilter):
         return queryset
 
 
-def overdue_tasks(queryset):
-    now = timezone.localtime()
-    return queryset.exclude(status=Task.Status.COMPLETE).filter(
-        Q(availability_request__isnull=True) | Q(availability_request__is_active=True),
+def overdue_tasks(queryset, *, now=None):
+    now = now or timezone.localtime()
+    return incomplete_reminder_tasks(queryset).filter(
         Q(due_date__lt=now.date()) | Q(due_date=now.date(), due_time__lte=now.time()),
     )
 
@@ -353,12 +350,44 @@ def overdue_tasks(queryset):
 class TaskAdmin(admin.ModelAdmin):
     form = TaskEditForm
     change_list_template = "admin/fellows/task/change_list.html"
+    actions = ['prepare_selected_task_drafts']
     list_display = ['title', 'assigned_to', 'scope', 'status', 'source', 'due_date', 'due_time', 'created_at']
     list_filter = [OverdueTaskFilter, 'status', 'scope', 'source', 'cohort']
     search_fields = ['title', 'description', 'assigned_to__user__email', 'assigned_to__user__first_name', 'assigned_to__user__last_name']
     list_select_related = ['assigned_to__user', 'cohort']
     fieldsets = [('Assignment', {'fields': ('title', 'description', 'source', 'status', ('due_date', 'due_time'))}), ('Who completes it', {'fields': ('scope', 'assigned_to', 'cohort')}), ('Appearance', {'fields': ('icon', 'color'), 'classes': ('collapse',)})]
     autocomplete_fields = ['assigned_to', 'cohort']
+
+    def has_task_drafts_permission(self, request):
+        return self.has_view_or_change_permission(request) and request.user.has_perm('fellows.change_fellow')
+
+    def changelist_view(self, request, extra_context=None):
+        can_prepare_drafts = self.has_task_drafts_permission(request)
+        if request.method == 'POST' and 'prepare_overdue_task_drafts' in request.POST:
+            if not can_prepare_drafts:
+                raise PermissionDenied
+            try:
+                tasks = self.get_changelist_instance(request).queryset
+            except IncorrectLookupParameters:
+                return super().changelist_view(request, extra_context)
+            now = timezone.localtime()
+            return self.render_task_drafts(request, overdue_tasks(tasks, now=now), now=now, overdue=True)
+        return super().changelist_view(request, {
+            **(extra_context or {}), 'can_prepare_task_drafts': can_prepare_drafts,
+        })
+
+    @admin.action(permissions=['task_drafts'], description='Email about selected tasks')
+    def prepare_selected_task_drafts(self, request, queryset):
+        return self.render_task_drafts(request, incomplete_reminder_tasks(queryset), now=timezone.localtime())
+
+    def render_task_drafts(self, request, queryset, *, now, overdue=False):
+        drafts, skipped = task_reminder_drafts(queryset, now=now)
+        return render(request, 'admin/fellows/task/email_drafts.html', {
+            **self.admin_site.each_context(request),
+            'title': 'Overdue task email drafts' if overdue else 'Selected task email drafts',
+            'drafts': drafts, 'skipped': skipped, 'overdue': overdue,
+            'back_url': request.get_full_path(),
+        })
 
     def add_view(self, request, form_url='', extra_context=None):
         return redirect('admin:fellows_task_assign')
