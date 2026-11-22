@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import BooleanField, Case, Count, F, Prefetch, Q, Value, When
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
@@ -48,31 +48,6 @@ from .serializers import MeetingAvailabilitySerializer, TaskSerializer, Availabi
 from .badges_engine import evaluate_and_sync_badges
 
 
-def ensure_default_sdgs_exist():
-    """Seeds all 17 official UN Sustainable Development Goals with official names and colors."""
-    UN_SDGS = [
-        {"code": 1, "name": "No Poverty", "color": "#E5243B"},
-        {"code": 2, "name": "Zero Hunger", "color": "#DDA63A"},
-        {"code": 3, "name": "Good Health & Well-Being", "color": "#4C9F38"},
-        {"code": 4, "name": "Quality Education", "color": "#C5192D"},
-        {"code": 5, "name": "Gender Equality", "color": "#FF3A21"},
-        {"code": 6, "name": "Clean Water & Sanitation", "color": "#26BDE2"},
-        {"code": 7, "name": "Affordable & Clean Energy", "color": "#FCC30B"},
-        {"code": 8, "name": "Decent Work & Economic Growth", "color": "#A21942"},
-        {"code": 9, "name": "Industry, Innovation & Infrastructure", "color": "#FD6925"},
-        {"code": 10, "name": "Reduced Inequalities", "color": "#DD1367"},
-        {"code": 11, "name": "Sustainable Cities & Communities", "color": "#FD9D24"},
-        {"code": 12, "name": "Responsible Consumption & Production", "color": "#BF8B2E"},
-        {"code": 13, "name": "Climate Action", "color": "#3F7E44"},
-        {"code": 14, "name": "Life Below Water", "color": "#0A97D9"},
-        {"code": 15, "name": "Life on Land", "color": "#56C02B"},
-        {"code": 16, "name": "Peace, Justice & Strong Institutions", "color": "#00689D"},
-        {"code": 17, "name": "Partnerships for the Goals", "color": "#19486A"},
-    ]
-    for item in UN_SDGS:
-        SDG.objects.get_or_create(code=item['code'], defaults=item)
-
-
 def google_account_details(user):
     account = SocialAccount.objects.filter(user=user, provider='google').first()
     data = account.extra_data if account else {}
@@ -111,7 +86,7 @@ def dashboard_view(request, drive=False):
             messages.success(request, 'Pinned to your cohort.' if created else 'You’ve already pinned this link.')
             return redirect('dashboard-drive')
 
-    links = CohortDriveLink.objects.filter(cohort_id=fellow.cohort_id)
+    links = CohortDriveLink.objects.filter(cohort_id=fellow.cohort_id, is_published=True)
     shared_resources = SharedDriveResource.objects.none()
     if fellow.cohort_id:
         shared_resources = SharedDriveResource.objects.filter(is_published=True).filter(
@@ -414,7 +389,6 @@ class CohortSDGsAPIView(APIView):
             return Response({'status': 'error', 'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
 
         fellow = request.user.fellow_profile
-        ensure_default_sdgs_exist()
 
         cohort = fellow.cohort
         selected_codes = set(cohort.selected_sdgs.values_list('code', flat=True)) if cohort else set()
@@ -446,7 +420,6 @@ class CohortSDGsAPIView(APIView):
         if not cohort:
             return Response({'status': 'error', 'detail': 'You are not currently assigned to a cohort.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        ensure_default_sdgs_exist()
 
         raw_codes = request.data.get('sdg_codes', [])
         if not isinstance(raw_codes, list):
@@ -489,11 +462,15 @@ class BadgesAPIView(APIView):
             return Response({'status': 'error', 'detail': 'Fellow profile missing.'}, status=status.HTTP_400_BAD_REQUEST)
 
         fellow = request.user.fellow_profile
-        evaluate_and_sync_badges(fellow)
+        evaluate_and_sync_badges(fellow, from_read=True)
 
-        fellow_badges = FellowBadge.objects.filter(fellow=fellow).select_related('badge').order_by('badge__order')
-        earned_count = fellow_badges.filter(earned=True).count()
-        total_count = fellow_badges.count()
+        fellow_badges = list(FellowBadge.objects.filter(fellow=fellow).select_related('badge')
+            .defer('badge__icon_png').annotate(custom_icon=Case(
+                When(badge__icon_png=b'', then=Value(False)),
+                default=Value(True), output_field=BooleanField(),
+            )).order_by('badge__order'))
+        earned_count = sum(record.earned for record in fellow_badges)
+        total_count = len(fellow_badges)
 
         if earned_count >= 9:
             level_title = "UNbound Legend • Level 4"
@@ -516,7 +493,7 @@ class BadgesAPIView(APIView):
                 'color': b.color,
                 'icon_class': b.icon_class,
                 'artwork': b.artwork,
-                'has_custom_icon': bool(b.icon_png),
+                'has_custom_icon': fb.custom_icon,
                 'earned': fb.earned,
                 'progress': fb.progress,
                 'earned_at': fb.earned_at,
@@ -568,14 +545,18 @@ class TaskViewSet(viewsets.ModelViewSet):
                 icon=icon,
                 color=color,
             )
-            self._refresh_task_progress(task)
+            if task.status == Task.Status.COMPLETE:
+                self._refresh_task_progress(task)
         self._sync_google_mirrors(task)
 
     def _refresh_task_progress(self, task):
-        for fellow in task.affected_fellows():
-            evaluate_and_sync_badges(fellow)
+        if Badge.objects.filter(trigger_type=Badge.TriggerType.TASK_COUNT).exists():
+            for fellow in task.affected_fellows():
+                evaluate_and_sync_badges(fellow)
 
     def _sync_google_mirrors(self, task):
+        if not settings.GOOGLE_INTEGRATIONS_ENABLED:
+            return
         # Each member's Google task is owned by that member's Google account.
         users = {self.request.user.pk: self.request.user}
         for link in task.google_links.select_related('user'):
@@ -589,22 +570,28 @@ class TaskViewSet(viewsets.ModelViewSet):
             tasks = self.filter_queryset(self.get_queryset()).select_for_update(of=('self',))
             task = get_object_or_404(tasks, pk=kwargs['pk'])
             self.check_object_permissions(request, task)
+            was_complete = task.status == Task.Status.COMPLETE
             serializer = self.get_serializer(task, data=request.data, partial=kwargs.get('partial', False))
             serializer.is_valid(raise_exception=True)
             task = serializer.save()
-            self._refresh_task_progress(task)
+            if was_complete != (task.status == Task.Status.COMPLETE):
+                self._refresh_task_progress(task)
         self._sync_google_mirrors(task)
         return Response(serializer.data)
 
     def perform_destroy(self, instance):
         if not instance.can_manage(self.request.user):
             raise PermissionDenied('Only the creator can delete a self-created task. Staff manage UNbound assignments.')
-        mirrors = {link.user_id: (link.user, link.google_task_id) for link in instance.google_links.select_related('user')}
-        if instance.scope == Task.Scope.PERSONAL and instance.google_task_id and instance.assigned_to_id:
-            owner = instance.assigned_to.user
-            mirrors.setdefault(owner.pk, (owner, instance.google_task_id))
+        mirrors = {}
+        if settings.GOOGLE_INTEGRATIONS_ENABLED:
+            mirrors = {link.user_id: (link.user, link.google_task_id) for link in instance.google_links.select_related('user')}
+            if instance.scope == Task.Scope.PERSONAL and instance.google_task_id and instance.assigned_to_id:
+                owner = instance.assigned_to.user
+                mirrors.setdefault(owner.pk, (owner, instance.google_task_id))
         with transaction.atomic():
-            fellows = list(instance.affected_fellows())
+            fellows = []
+            if instance.status == Task.Status.COMPLETE and Badge.objects.filter(trigger_type=Badge.TriggerType.TASK_COUNT).exists():
+                fellows = list(instance.affected_fellows())
             instance.delete()
             for fellow in fellows:
                 evaluate_and_sync_badges(fellow)
@@ -677,9 +664,14 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
         else:
             qs = qs.filter(Q(assign_to_all=True) | Q(cohort__isnull=True))
 
-        for meeting in qs:
-            meeting.create_tasks_for_fellows(fellow=fellow)
-        serializer = AvailabilityRequestSerializer(qs.order_by('-created_at'), many=True, context={'request': request})
+        meetings = list(qs.order_by('-created_at'))
+        existing = dict(Task.objects.filter(
+            assigned_to=fellow, availability_request__in=meetings,
+        ).values_list('availability_request_id', 'cohort_id'))
+        for meeting in meetings:
+            if meeting.pk not in existing or existing[meeting.pk] != fellow.cohort_id:
+                meeting.create_tasks_for_fellows(fellow=fellow)
+        serializer = AvailabilityRequestSerializer(meetings, many=True, context={'request': request})
         return Response({'status': 'success', 'requests': serializer.data})
 
     @action(detail=False, methods=['post'], url_path='bulk-save')
@@ -691,7 +683,8 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
         fellow = request.user.fellow_profile
         with transaction.atomic():
             records = submit_availability(fellow, request.data.get('request_id'), request.data.get('slots'))
-            evaluate_and_sync_badges(fellow)
+            if Badge.objects.filter(trigger_type__in=[Badge.TriggerType.AVAILABILITY, Badge.TriggerType.TASK_COUNT]).exists():
+                evaluate_and_sync_badges(fellow)
         return Response({'status': 'success', 'is_completed': True, 'slots': self.get_serializer(records, many=True).data})
 
     @action(detail=False, methods=['post'], url_path='sync-google')
@@ -1025,13 +1018,16 @@ class DashboardOverviewAPIView(APIView):
 
         team_members = []
         if cohort:
-            cohort_fellows = Fellow.objects.filter(cohort=cohort, user__is_active=True).select_related('user')
+            cohort_fellows = Fellow.objects.filter(cohort=cohort, user__is_active=True).select_related('user').prefetch_related(
+                Prefetch('user__socialaccount_set', queryset=SocialAccount.objects.filter(provider='google').order_by('pk'),
+                         to_attr='google_accounts'),
+            )
         else:
             cohort_fellows = Fellow.objects.none()
 
         for cf in cohort_fellows:
-            sa = SocialAccount.objects.filter(user=cf.user, provider='google').first()
-            picture = sa.extra_data.get('picture', '') if sa else ''
+            accounts = cf.user.google_accounts
+            picture = accounts[0].extra_data.get('picture', '') if accounts else ''
             member_name = cf.user.get_full_name() or cf.user.username or cf.user.email
             initials = "".join([part[0].upper() for part in member_name.split()[:2]]) if member_name else "F"
             
@@ -1045,15 +1041,9 @@ class DashboardOverviewAPIView(APIView):
                 'is_current_user': (cf.id == fellow.id)
             })
 
-        ensure_default_sdgs_exist()
         sdgs_data = []
-        if cohort and cohort.selected_sdgs.exists():
-            for sdg in cohort.selected_sdgs.all().order_by('code'):
-                sdgs_data.append({
-                    'code': sdg.code,
-                    'name': sdg.name,
-                    'color': sdg.color
-                })
+        if cohort:
+            sdgs_data = list(cohort.selected_sdgs.values('code', 'name', 'color'))
         if cohort:
             tasks_qs = Task.objects.filter(
                 Q(assigned_to=fellow) | (Q(scope=Task.Scope.TEAM) & Q(cohort=cohort))
@@ -1065,9 +1055,9 @@ class DashboardOverviewAPIView(APIView):
             availability_task_visibility_filter(fellow)
         )
         unfinished = tasks_qs.exclude(status=Task.Status.COMPLETE)
-        open_tasks = unfinished.count()
-        completed_tasks = tasks_qs.filter(status=Task.Status.COMPLETE).count()
-        total_tasks = tasks_qs.count()
+        counts = tasks_qs.aggregate(total=Count('pk'), completed=Count('pk', filter=Q(status=Task.Status.COMPLETE)))
+        total_tasks, completed_tasks = counts['total'], counts['completed']
+        open_tasks = total_tasks - completed_tasks
         now = timezone.localtime()
         today = now.date()
         is_overdue = Q(due_date__lt=today) | Q(due_date=today, due_time__lte=now.time())
@@ -1077,10 +1067,10 @@ class DashboardOverviewAPIView(APIView):
 
         completion_pct = round((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 0
 
-        evaluate_and_sync_badges(fellow)
+        evaluate_and_sync_badges(fellow, from_read=True)
         fellow_badges = FellowBadge.objects.filter(fellow=fellow)
-        earned_badges = fellow_badges.filter(earned=True).count()
-        total_badges = fellow_badges.count()
+        badge_counts = fellow_badges.aggregate(total=Count('pk'), earned=Count('pk', filter=Q(earned=True)))
+        earned_badges, total_badges = badge_counts['earned'], badge_counts['total']
 
         if earned_badges >= 9:
             level_name = "UNbound Legend"

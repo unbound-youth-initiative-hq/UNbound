@@ -5,12 +5,15 @@
       <i class="fa-solid fa-folder file-folder" aria-hidden="true"></i>
     {% elif kind == 'File' %}
       <i class="fa-regular fa-file file-doc" aria-hidden="true"></i>
+    {% elif kind == 'Form' %}
+      <i class="fa-solid fa-list-check file-doc" aria-hidden="true"></i>
     {% else %}
       <i class="fa-solid fa-link file-generic" aria-hidden="true"></i>
     {% endif %}
     <span class="file-text">
       <span class="file-name">{{ link.title }}</span>
       <span class="file-meta">{{ kind }}</span>
+      {% if link.description %}<span class="file-meta">{{ link.description }}</span>{% endif %}
     </span>
     <i class="fa-solid fa-arrow-up-right-from-square drive-open-icon" aria-hidden="true"></i>
   </a>

@@ -100,16 +100,23 @@ class Cohort(models.Model):
         ordering = ['-start_date']
 
 
+def validate_resource_url(url):
+    try:
+        parts = urlsplit(url)
+        if parts.scheme == 'https' and parts.hostname and parts.username is None and parts.password is None:
+            return
+    except ValueError:
+        pass
+    raise ValidationError('Enter a valid HTTPS link without a username or password.')
+
+
 class DriveResource(models.Model):
     title = models.CharField(max_length=150)
     url = models.URLField(
-        'Google sharing link', max_length=2048,
-        validators=[RegexValidator(
-            r'^https://(?:drive|docs)\.google\.com/',
-            'Paste an HTTPS sharing link from drive.google.com or docs.google.com.',
-        )],
-        help_text='Copy the file or folder link from Google. Share it with the intended fellows in Drive.',
+        'Resource URL', max_length=2048, validators=[validate_resource_url],
+        help_text='Use an HTTPS link. For private files and forms, grant access at the destination.',
     )
+    description = models.TextField(blank=True, db_default='')
 
     class Meta:
         abstract = True
@@ -120,7 +127,14 @@ class DriveResource(models.Model):
 
     @property
     def kind(self):
-        path = urlsplit(self.url).path
+        parts = urlsplit(self.url)
+        path = parts.path
+        if parts.hostname == 'forms.gle' or (
+            parts.hostname == 'docs.google.com' and path.startswith('/forms/')
+        ):
+            return 'Form'
+        if parts.hostname not in {'drive.google.com', 'docs.google.com'}:
+            return 'Website'
         if re.match(r'^/(?:drive/)?(?:u/\d+/)?folders/[\w-]+(?:/|$)', path):
             return 'Folder'
         if re.match(r'^/(?:file|document|spreadsheets|presentation|forms|drawings|vids)/(?:u/\d+/)?d/[\w-]+(?:/|$)', path):
@@ -131,15 +145,17 @@ class DriveResource(models.Model):
 class CohortDriveLink(DriveResource):
     cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name='drive_links')
     pinned_by = models.ForeignKey('Fellow', on_delete=models.CASCADE, null=True, blank=True, editable=False)
+    is_published = models.BooleanField(default=True, db_default=True)
 
     class Meta(DriveResource.Meta):
-        verbose_name = 'Google Drive link'
+        verbose_name = 'cohort resource or pin'
+        verbose_name_plural = 'cohort resources and pins'
 
 
 class SharedDriveResource(DriveResource):
     class Audience(models.TextChoices):
         SELECTED = 'selected', 'Selected cohorts'
-        ALL = 'all', 'All cohorts'
+        ALL = 'all', 'All cohorts (fellows with a cohort)'
 
     audience = models.CharField(max_length=8, choices=Audience.choices, default=Audience.SELECTED)
     cohorts = models.ManyToManyField(
@@ -149,7 +165,7 @@ class SharedDriveResource(DriveResource):
     is_published = models.BooleanField(default=True)
 
     class Meta(DriveResource.Meta):
-        verbose_name = 'Shared Drive resource'
+        verbose_name = 'shared resource'
 
 
 class ConfirmedMeeting(models.Model):
@@ -613,36 +629,44 @@ class AvailabilityRequest(models.Model):
         """Reconcile active recipients and task metadata without changing valid submissions."""
         from django.db import transaction
 
-        if not self.is_active:
-            return []
         with transaction.atomic():
-            # All creation paths lock the request, preventing duplicate task creation.
-            type(self).objects.select_for_update().get(pk=self.pk)
-            targets = self.target_fellows()
+            # Refresh under the same lock used by submissions and schedule edits.
+            poll = type(self).objects.select_for_update().get(pk=self.pk)
+            if not poll.is_active:
+                return []
+            targets = poll.target_fellows()
             if fellow is not None:
                 targets = targets.filter(pk=fellow.pk)
+            targets = list(targets)
+            existing = {
+                task.assigned_to_id: task
+                for task in poll.tasks.filter(assigned_to__in=targets).order_by('-pk')
+            }
             tasks = []
+            new_tasks = []
+            changed_tasks = []
+            values = {
+                'title': f"WhenBound: {poll.title}",
+                'description': poll.description or f"Submit your availability for {poll.start_date:%b %d} – {poll.end_date:%b %d}.",
+                'scope': Task.Scope.PERSONAL,
+                'source': Task.Source.UNBOUND,
+                'icon': 'fa-calendar-check',
+                'color': '#00B4D8',
+                'due_date': poll.deadline or poll.start_date,
+            }
             for recipient in targets:
-                values = {
-                    'title': f"WhenBound: {self.title}",
-                    'description': self.description or f"Submit your availability for {self.start_date.strftime('%b %d')} – {self.end_date.strftime('%b %d')}.",
-                    'scope': Task.Scope.PERSONAL,
-                    'source': Task.Source.UNBOUND,
-                    'icon': 'fa-calendar-check',
-                    'color': '#00B4D8',
-                    'due_date': self.deadline or self.start_date,
-                    'cohort': recipient.cohort,
-                }
-                task, created = Task.objects.get_or_create(
-                    assigned_to=recipient,
-                    availability_request=self,
-                    defaults={**values, 'status': Task.Status.PENDING},
-                )
-                if not created:
-                    for name, value in values.items():
+                fields = {**values, 'cohort_id': recipient.cohort_id}
+                task = existing.get(recipient.pk)
+                if task is None:
+                    task = Task(assigned_to=recipient, availability_request=poll, **fields)
+                    new_tasks.append(task)
+                elif any(getattr(task, name) != value for name, value in fields.items()):
+                    for name, value in fields.items():
                         setattr(task, name, value)
-                    task.save(update_fields=list(values))
+                    changed_tasks.append(task)
                 tasks.append(task)
+            Task.objects.bulk_create(new_tasks)
+            Task.objects.bulk_update(changed_tasks, [*values, 'cohort'])
             return tasks
 
     def __str__(self):
