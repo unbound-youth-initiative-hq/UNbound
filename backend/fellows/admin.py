@@ -203,12 +203,11 @@ class TaskAssignmentForm(forms.Form):
 
 @admin.register(Fellow)
 class FellowAdmin(admin.ModelAdmin):
-    change_list_template = "admin/fellows/fellow/change_list.html"
     list_display = ['__str__', 'role', 'chapter', 'cohort', 'get_current_phase', 'xp_points']
     list_filter = ['role', 'chapter', 'cohort']
     search_fields = ['user__first_name', 'user__last_name', 'user__email']
     inlines = [FellowBadgeInline]
-    actions = ['prepare_individual_drafts', 'email_selected_fellows']
+    actions = ['prepare_individual_drafts']
     autocomplete_fields = ['user', 'chapter', 'cohort']
     list_select_related = ['user', 'chapter', 'cohort__phase']
     readonly_fields = ['xp_points', 'get_current_phase']
@@ -259,29 +258,9 @@ class FellowAdmin(admin.ModelAdmin):
             'skipped': queryset.count() - len(fellows),
         })
 
-    @admin.action(permissions=['change'], description='Email selected fellows (BCC draft)')
-    def email_selected_fellows(self, request, queryset):
-        selected = queryset.filter(role=Fellow.Role.FELLOW, user__is_active=True)
-        addresses = verified_google_addresses(selected)
-        recipients = sorted(set(addresses.values()), key=str.casefold)
-        bcc = ','.join(recipients)
-        return render(request, 'admin/fellows/fellow/email_selected.html', {
-            **self.admin_site.each_context(request), 'opts': self.model._meta,
-            'title': 'Email selected fellows', 'recipients': recipients,
-            'skipped': queryset.count() - len(addresses), 'bcc': bcc,
-            'draft_url': 'mailto:?' + urlencode({'bcc': bcc}, quote_via=quote),
-        })
-
     @admin.display(description='Current Phase')
     def get_current_phase(self, obj):
         return obj.cohort.current_phase if obj.cohort else '-'
-
-    def changelist_view(self, request, extra_context=None):
-        context = {
-            **(extra_context or {}),
-            "can_email_pending_assignments": self.has_prepare_drafts_permission(request),
-        }
-        return super().changelist_view(request, extra_context=context)
 
     def get_urls(self):
         custom_urls = [

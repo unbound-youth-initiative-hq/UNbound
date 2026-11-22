@@ -27,27 +27,11 @@ class ReleaseWorkflowTests(TestCase):
         self.assertNotContains(response, 'google_refresh_token')
         self.assertEqual(self.client.get('/admin/fellows/task/add/').status_code, 302)
 
-    def test_selected_email_draft_uses_only_verified_google_recipients(self):
-        from allauth.socialaccount.models import SocialAccount
-        from django.core import mail
-        def google_fellow(name, *, verified=True, active=True):
-            user = get_user_model().objects.create_user(name, email=f'{name}@local.example', is_active=active)
-            SocialAccount.objects.create(user=user, uid=name, provider='google', extra_data={
-                'email': f'{name}@google.example', 'email_verified': verified,
-            })
-            return Fellow.objects.create(user=user, cohort=self.cohort)
-        included = google_fellow('included')
-        unverified = google_fellow('unverified', verified=False)
-        inactive = google_fellow('inactive', active=False)
-        google_fellow('other')
-        response = self.client.post(reverse('admin:fellows_fellow_changelist'), {
-            'action': 'email_selected_fellows', '_selected_action': [included.pk, unverified.pk, inactive.pk],
-        })
-        self.assertEqual(response.context['recipients'], ['included@google.example'])
-        self.assertEqual(response.context['skipped'], 2)
-        self.assertContains(response, 'mailto:?bcc=included%40google.example')
-        self.assertNotContains(response, 'other@google.example')
-        self.assertEqual(len(mail.outbox), 0)
+    def test_fellows_list_offers_individual_drafts_without_old_email_controls(self):
+        response = self.client.get(reverse('admin:fellows_fellow_changelist'))
+        self.assertContains(response, 'Prepare individual assignment drafts')
+        self.assertNotContains(response, 'email_selected_fellows')
+        self.assertNotContains(response, reverse('admin:fellows_fellow_send_pending_reminders'))
 
     def test_badge_admin_upload_and_remove_uses_database(self):
         from io import BytesIO
