@@ -1185,6 +1185,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 
+  function pollDateLabel(request) {
+    const first = formatShortDate(request.start_date);
+    if (request.start_date === request.end_date) return first;
+    const range = `${first} – ${formatShortDate(request.end_date)}`;
+    return request.selected_dates?.length ? `${request.selected_dates.length} dates · ${range}` : range;
+  }
+
   function renderRequestBanner() {
     if (!currentRequestData) return;
     const req = currentRequestData;
@@ -1202,7 +1209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (titleEl) titleEl.textContent = req.title || 'WhenBound Request';
     if (descEl) descEl.textContent = req.description || 'Mark your availability below to coordinate our next team milestone.';
-    if (rangeEl) rangeEl.textContent = `${formatShortDate(req.start_date)} – ${formatShortDate(req.end_date)}`;
+    if (rangeEl) rangeEl.textContent = pollDateLabel(req);
 
     if (deadlineWrap && deadlineEl) {
       if (req.deadline) {
@@ -1234,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectorWrap.style.display = 'flex';
         selectEl.innerHTML = activeMeetingRequests.map(r => `
           <option value="${recordId(r.id) || ''}" ${r.id === currentRequestId ? 'selected' : ''}>
-            ${escapeHtml(r.title)} (${escapeHtml(formatShortDate(r.start_date))} - ${escapeHtml(formatShortDate(r.end_date))})
+            ${escapeHtml(r.title)} (${escapeHtml(pollDateLabel(r))})
           </option>
         `).join('');
 

@@ -493,8 +493,8 @@ class AvailabilityRequestAdmin(admin.ModelAdmin):
             'fields': ('title', 'description', 'is_active')
         }),
         ('Possible meeting times', {
-            'fields': (('start_date', 'end_date'), ('start_hour', 'end_hour'), 'reset_snapshot', 'confirm_response_reset'),
-            'description': 'Both dates are included. Enter hours in Monterrey time. The end hour is exclusive. Use 24 for midnight. Fellows see slots in their selected time zone.',
+            'fields': ('selected_dates', ('start_date', 'end_date'), ('start_hour', 'end_hour'), 'reset_snapshot', 'confirm_response_reset'),
+            'description': 'Choose specific dates or an inclusive date range of up to 42 days. Enter hours in Monterrey time. The end hour is exclusive. Use 24 for midnight. Fellows see slots in their selected time zone.',
         }),
         ('Response due date', {
             'fields': ('deadline',),
@@ -509,6 +509,9 @@ class AvailabilityRequestAdmin(admin.ModelAdmin):
         }),
     )
     actions = ['sync_tasks']
+
+    class Media:
+        js = ('whenbound-dates.js',)
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)

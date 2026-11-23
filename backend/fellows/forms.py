@@ -1,3 +1,4 @@
+from datetime import date
 from io import BytesIO
 from urllib.parse import parse_qs, urlsplit
 
@@ -25,13 +26,19 @@ class InviteBatchForm(forms.Form):
 
 
 class AvailabilityRequestAdminForm(forms.ModelForm):
+    selected_dates = forms.CharField(
+        required=False, label='Specific dates',
+        widget=forms.Textarea(attrs={'rows': 4, 'placeholder': '2026-12-01\n2026-12-04'}),
+        help_text='Enter dates as YYYY-MM-DD, one per line. This list sets the earliest and latest dates. '
+                  'Leave it blank to include every day in the range below.',
+    )
     reset_snapshot = forms.CharField(required=False, widget=forms.HiddenInput)
     confirm_response_reset = forms.BooleanField(
         required=False, label='Reset existing availability if I change the meeting window',
         help_text='The saved responses will be cleared and linked tasks will reopen. To preserve them, create a new poll instead.',
     )
     snapshot_salt = 'whenbound-window-reset'
-    window_fields = ('start_date', 'end_date', 'start_hour', 'end_hour')
+    window_fields = AvailabilityRequest.window_fields
 
     class Meta:
         model = AvailabilityRequest
@@ -43,9 +50,15 @@ class AvailabilityRequestAdminForm(forms.ModelForm):
             'end_hour': 'End hour (exclusive)',
             'deadline': 'Respond by',
         }
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'end_date': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['start_date'].required = self.fields['end_date'].required = False
+        self.initial['selected_dates'] = '\n'.join(self.initial.get('selected_dates') or [])
         if self.instance.pk and not self.is_bound:
             snapshot = self.response_snapshot()
             self.initial['reset_snapshot'] = signing.dumps(snapshot, salt=self.snapshot_salt)
@@ -66,7 +79,21 @@ class AvailabilityRequestAdminForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        if not self.instance.pk or not set(self.window_fields).intersection(self.changed_data):
+        try:
+            dates = sorted({date.fromisoformat(value) for value in data.get('selected_dates', '').split()})
+        except ValueError:
+            self.add_error('selected_dates', 'Enter a valid date on each line using YYYY-MM-DD.')
+            return data
+        data['selected_dates'] = [day.isoformat() for day in dates]
+        if dates:
+            data['start_date'], data['end_date'] = dates[0], dates[-1]
+        else:
+            for key in ('start_date', 'end_date'):
+                if not data.get(key) and key not in self.errors:
+                    self.add_error(key, 'Enter a date for the range or list specific dates above.')
+        if self.errors or not self.instance.pk or all(
+            data.get(field) == getattr(self.instance, field) for field in self.window_fields
+        ):
             return data
         snapshot = self.response_snapshot()
         if not (snapshot[-4] or snapshot[-2]):

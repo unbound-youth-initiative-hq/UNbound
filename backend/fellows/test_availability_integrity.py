@@ -40,6 +40,24 @@ class AvailabilityIntegrityTests(TestCase):
         response = self.client.get('/api/meetings/requests/')
         self.assertTrue(response.data['requests'][0]['is_completed'])
 
+    def test_specific_dates_are_used_for_personal_and_group_grids(self):
+        self.meeting.end_date = date(2026, 11, 4)
+        self.meeting.selected_dates = ['2026-11-01', '2026-11-04']
+        self.meeting.save()
+        expected = self.meeting.selected_dates
+        response = self.client.get('/api/meetings/requests/').data['requests'][0]
+        self.assertEqual([day['date'] for day in response['display_days']], expected)
+        self.assertEqual(response['total_slots_count'], 4)
+        slots = [{'date': day, 'hour': hour, 'is_available': True} for day in expected for hour in (9, 10)]
+        self.assertEqual(self.submit(slots).status_code, 200)
+        result = self.client.get('/api/meetings/group-availability/', {'request_id': self.meeting.pk})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual([item['date'] for item in result.data['dates']], expected)
+        self.assertEqual([item['available_count'] for item in result.data['matrix']], [1, 1, 1, 1])
+        slots[-1]['date'] = '2026-11-03'
+        self.assertEqual(self.submit(slots).status_code, 400)
+        self.assertEqual(self.meeting.availability_slots.count(), 4)
+
     def test_invalid_payloads_do_not_erase_previous_response(self):
         self.assertEqual(self.submit(self.grid(True)).status_code, 200)
         invalid = [[], self.grid()[:1], [self.grid()[0], self.grid()[0]],

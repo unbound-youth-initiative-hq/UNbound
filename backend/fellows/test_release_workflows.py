@@ -2,7 +2,8 @@ from datetime import date
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.db import OperationalError
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from .models import Cohort, Fellow, Phase, SDG, Task, ReminderBatch, ReminderDelivery, InviteCode
 from .reminders import dispatch_reminders
@@ -41,11 +42,26 @@ class ReleaseWorkflowTests(TestCase):
     def test_dashboard_exposes_accessible_navigation_and_settings(self):
         page = self.client.get(reverse('dashboard'))
         self.assertContains(page, 'Mission Control')
+        self.assertContains(page, 'Task Completion')
         self.assertContains(page, 'data-view="overview" aria-current="page"')
         self.assertContains(page, '<dialog class="modal-box preferences-modal" id="dashboardPreferencesModal"')
         self.assertContains(page, 'aria-describedby="availabilityInstructions"')
         resources = self.client.get(reverse('dashboard-drive'))
         self.assertContains(resources, 'data-view="drive" aria-current="page"')
+
+    def test_public_portal_readiness_requires_database_and_allows_public_site_origin(self):
+        browser = Client()
+        url = reverse('portal-ready')
+        response = browser.get(url, HTTP_ORIGIN='https://unboundyi.org')
+        self.assertEqual(response.json(), {'ready': True})
+        self.assertEqual(response['Access-Control-Allow-Origin'], 'https://unboundyi.org')
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertIn('Origin', response['Vary'])
+        self.assertNotIn('Access-Control-Allow-Origin', browser.get(url, HTTP_ORIGIN='https://example.org'))
+        with patch('fellows.views.connection.cursor', side_effect=OperationalError):
+            unavailable = browser.get(url, HTTP_ORIGIN='https://unboundyi.org')
+        self.assertEqual(unavailable.status_code, 503)
+        self.assertEqual(unavailable.json(), {'ready': False})
 
     def test_coordinator_summary_links_follow_permissions(self):
         home = reverse('admin:index')
