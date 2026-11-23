@@ -4,13 +4,131 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
-  <meta http-equiv="refresh" content="0; url=https://unbound-35ei.onrender.com/">
-  <title>Fellow login has moved — UNbound</title>
+  <meta name="theme-color" content="#eff6fb">
+  <link rel="icon" type="image/png" href="favicon-light.png">
+  <link rel="icon" type="image/png" href="favicon-dark.png" media="(prefers-color-scheme: dark)">
+  <title>Fellow Login · UNbound</title>
+  <style>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      display: grid;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      place-items: center;
+      color: #092b43;
+      background: radial-gradient(ellipse at 75% 15%, #c8eefb, transparent 55%), #eff6fb;
+      font: 1rem/1.6 Montserrat, system-ui, sans-serif;
+    }
+    main { width: min(100%, 420px); }
+    .panel {
+      padding: clamp(24px, 6vw, 44px);
+      border: 1px solid #c8dce8;
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 0 16px 48px rgba(9, 43, 67, .12);
+      text-align: center;
+    }
+    .logo { display: block; width: 78px; height: auto; margin: 0 auto 20px; }
+    h1 { margin: 0; line-height: 1.2; font-size: clamp(1.45rem, 6vw, 2rem); }
+    p { margin: 10px 0 0; color: #36576c; }
+    .spinner {
+      display: block;
+      width: 32px;
+      height: 32px;
+      margin: 20px auto 0;
+      border: 3px solid #cceaf1;
+      border-top-color: #075b70;
+      border-radius: 50%;
+      animation: spin .85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+    .button {
+      display: inline-block;
+      min-height: 44px;
+      margin-top: 18px;
+      padding: 8px 22px;
+      border: 0;
+      border-radius: 99px;
+      background: linear-gradient(135deg, #075b70, #176356);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .button:focus-visible { outline: 2px solid #075b70; outline-offset: 4px; }
+  </style>
 </head>
 <body>
   <main>
-    <h1>Fellow login has moved</h1>
-    <p><a href="https://unbound-35ei.onrender.com/">Continue to Fellow Login</a></p>
+    <div role="status" aria-atomic="true">
+      <section class="panel" id="waiting" hidden>
+        <img class="logo" src="logo.png" alt="" width="217" height="160">
+        <h1>Opening UNbound…</h1>
+        <p>Fellow Login will open when it’s ready.</p>
+        <span class="spinner" aria-hidden="true"></span>
+      </section>
+    </div>
+    <section class="panel" id="unavailable" hidden>
+      <h1>UNbound is taking longer than expected</h1>
+      <button class="button" id="retry" type="button">Try again</button>
+    </section>
+    <noscript>
+      <section class="panel">
+        <h1>Fellow Login</h1>
+        <a class="button" href="https://unbound-35ei.onrender.com/">Open UNbound</a>
+      </section>
+    </noscript>
   </main>
+  <script>
+    const portalUrl = 'https://unbound-35ei.onrender.com/';
+    const waiting = document.getElementById('waiting');
+    const unavailable = document.getElementById('unavailable');
+    const retry = document.getElementById('retry');
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    async function portalReady(timeout) {
+      const request = new AbortController();
+      const timer = setTimeout(() => request.abort(), timeout);
+      try {
+        const response = await fetch(new URL('readyz', portalUrl), {
+          cache: 'no-store',
+          credentials: 'omit',
+          signal: request.signal,
+        });
+        if (!response.ok || !response.headers.get('Content-Type')?.includes('application/json')) return false;
+        return (await response.json()).ready === true;
+      } catch {
+        return false;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function openPortal() {
+      unavailable.hidden = true;
+      const reveal = setTimeout(() => { waiting.hidden = false; }, 750);
+      const deadline = performance.now() + 90000;
+      while (performance.now() < deadline) {
+        const ready = await portalReady(Math.min(4000, deadline - performance.now()));
+        if (ready) {
+          clearTimeout(reveal);
+          window.location.replace(portalUrl);
+          return;
+        }
+        await delay(Math.max(0, Math.min(1500, deadline - performance.now())));
+      }
+      clearTimeout(reveal);
+      waiting.hidden = true;
+      unavailable.hidden = false;
+      retry.focus();
+    }
+
+    retry.addEventListener('click', openPortal);
+    openPortal();
+  </script>
 </body>
 </html>
