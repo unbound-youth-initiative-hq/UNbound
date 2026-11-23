@@ -175,6 +175,34 @@ class PhaseOneWorkflowTests(TestCase):
         self.assertEqual(poll.submissions.count(), 0)
         self.assertEqual(poll.tasks.get().status, Task.Status.PENDING)
 
+    def test_whenbound_specific_dates_set_bounds_and_require_reset_for_changed_days(self):
+        fellow = self.make_fellow('alex', cohort=self.cohort)
+        add_url = reverse('admin:fellows_availabilityrequest_add')
+        fields = {
+            'title': 'Selected sessions', 'cohort': self.cohort.pk, 'is_active': 'on',
+            'selected_dates': '2026-12-04\n2026-12-01',
+            'start_hour': '9', 'end_hour': '10',
+        }
+        self.assertEqual(self.admin_post(add_url, fields).status_code, 302)
+        poll = AvailabilityRequest.objects.get(title='Selected sessions')
+        self.assertEqual(poll.selected_dates, ['2026-12-01', '2026-12-04'])
+        submit_availability(fellow, poll.pk, [
+            {'date': day, 'hour': 9, 'is_available': False} for day in poll.selected_dates
+        ])
+        url = reverse('admin:fellows_availabilityrequest_change', args=[poll.pk])
+
+        self.assertEqual(self.admin_post(url, fields).status_code, 302)
+        self.assertEqual(poll.submissions.count(), 1)
+        fields['selected_dates'] += '\n2026-12-03'
+        rejected = self.admin_post(url, fields)
+        self.assertContains(rejected, 'confirm the reset to change the window')
+        self.assertEqual(poll.submissions.count(), 1)
+        fields['reset_snapshot'] = rejected.context['adminform'].form['reset_snapshot'].value()
+        fields['confirm_response_reset'] = 'on'
+        self.assertEqual(self.admin_post(url, fields).status_code, 302)
+        self.assertEqual(poll.submissions.count(), 0)
+        self.assertEqual(poll.tasks.get().status, Task.Status.PENDING)
+
     def test_resources_publish_and_unpublish_with_legacy_pins_intact(self):
         fellow = self.make_fellow('alex', cohort=self.cohort)
         visitor = self.make_fellow('sam', cohort=self.make_cohort('Orbit'))

@@ -213,9 +213,6 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey', request_id
     end_of_window = datetime.combine(avail_request.end_date + timedelta(days=1), datetime.min.time(), tzinfo=tz)
     start_hour = avail_request.start_hour
     end_hour = avail_request.end_hour
-    num_days = (avail_request.end_date - avail_request.start_date).days + 1
-    base_date = avail_request.start_date
-
     events = fetch_calendar_events_in_range(
         user,
         time_min=start_of_window.isoformat(),
@@ -247,10 +244,7 @@ def sync_user_calendar_availability(user, tz_str='America/Monterrey', request_id
         busy_intervals.append((ev_start, ev_end))
 
     updated_slots = []
-    for day_idx in range(num_days):
-        current_date = base_date + timedelta(days=day_idx)
-        dow_code = (current_date.weekday() + 1) % 7
-
+    for current_date in avail_request.candidate_dates():
         for h in range(start_hour, end_hour):
             slot_start = datetime.combine(current_date, datetime.min.time(), tzinfo=tz).replace(hour=h)
             slot_end = slot_start + timedelta(hours=1)

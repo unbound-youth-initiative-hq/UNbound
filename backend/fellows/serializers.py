@@ -106,7 +106,7 @@ class AvailabilityRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = AvailabilityRequest
         fields = [
-            'id', 'title', 'description', 'start_date', 'end_date',
+            'id', 'title', 'description', 'start_date', 'end_date', 'selected_dates',
             'start_hour', 'end_hour', 'cohort', 'assign_to_all',
             'deadline', 'is_active', 'created_at', 'is_completed',
             'display_days', 'task_id', 'total_slots_count', 'filled_slots_count'
@@ -132,7 +132,7 @@ class AvailabilityRequestSerializer(serializers.ModelSerializer):
         return task.id if task else None
 
     def get_total_slots_count(self, obj):
-        days = (obj.end_date - obj.start_date).days + 1
+        days = len(obj.candidate_dates())
         hours = max(1, obj.end_hour - obj.start_hour)
         return days * hours
 

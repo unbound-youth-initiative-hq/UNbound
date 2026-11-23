@@ -27,8 +27,7 @@ def localized_poll_days(poll, zone_name):
     day_count = (poll.end_date - poll.start_date).days + 1
     if not (0 <= poll.start_hour < poll.end_hour <= 24 and 1 <= day_count <= 42):
         return days
-    for offset in range(day_count):
-        date = poll.start_date + timedelta(days=offset)
+    for date in poll.candidate_dates():
         start = datetime.combine(date, time(poll.start_hour), tzinfo=source_zone)
         slots = [(start + timedelta(hours=i)).astimezone(local_zone)
                  for i in range(poll.end_hour - poll.start_hour)]

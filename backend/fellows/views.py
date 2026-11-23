@@ -2,11 +2,12 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
-from django.db import transaction
+from django.db import DatabaseError, connection, transaction
 from django.db.models import BooleanField, Case, Count, F, Prefetch, Q, Value, When
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
+from django.utils.cache import patch_vary_headers
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST, require_safe
 from allauth.socialaccount.models import SocialAccount
@@ -46,6 +47,24 @@ from .calendar_export import meeting_calendar
 from .forms import DrivePinForm
 from .serializers import MeetingAvailabilitySerializer, TaskSerializer, AvailabilityRequestSerializer
 from .badges_engine import badge_rank_title, evaluate_and_sync_badges
+
+
+@never_cache
+@require_safe
+def portal_ready(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+    except DatabaseError:
+        response = JsonResponse({'ready': False}, status=503)
+    else:
+        response = JsonResponse({'ready': True})
+
+    origin = request.headers.get('Origin')
+    if origin in {'https://unboundyi.org', 'https://www.unboundyi.org'}:
+        response['Access-Control-Allow-Origin'] = origin
+    patch_vary_headers(response, ['Origin'])
+    return response
 
 
 def google_account_details(user):
@@ -773,8 +792,7 @@ class MeetingAvailabilityViewSet(viewsets.ModelViewSet):
 
             start_d = avail_request.start_date
             end_d = avail_request.end_date
-            num_days = (end_d - start_d).days + 1
-            dates_list = [start_d + timedelta(days=i) for i in range(num_days)]
+            dates_list = avail_request.candidate_dates()
             start_hour = avail_request.start_hour
             end_hour = avail_request.end_hour
 

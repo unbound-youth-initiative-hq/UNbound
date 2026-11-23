@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from urllib.parse import urlsplit
 
 from django.db import models
@@ -554,6 +555,7 @@ class AvailabilityRequest(models.Model):
     description = models.TextField(blank=True, help_text="Instructions or context for the fellows.")
     start_date = models.DateField(help_text="Start date of the availability window.")
     end_date = models.DateField(help_text="End date of the availability window.")
+    selected_dates = models.JSONField(default=list, db_default=[], blank=True)
     start_hour = models.PositiveSmallIntegerField(default=9, help_text="Starting hour (0-23, default 9 for 9 AM).")
     end_hour = models.PositiveSmallIntegerField(default=18, help_text="Ending hour, exclusive (1-24; 24 is midnight).")
 
@@ -587,16 +589,32 @@ class AvailabilityRequest(models.Model):
         related_name='created_availability_requests'
     )
 
-    def clean(self):
-        from datetime import date
-        from django.core.exceptions import ValidationError
+    window_fields = ('start_date', 'end_date', 'selected_dates', 'start_hour', 'end_hour')
 
+    def candidate_dates(self):
+        if self.selected_dates:
+            return tuple(date.fromisoformat(value) for value in self.selected_dates)
+        day_count = (self.end_date - self.start_date).days + 1
+        return tuple(self.start_date + timedelta(days=offset) for offset in range(day_count))
+
+    def clean(self):
         errors = {}
         if isinstance(self.start_date, date) and isinstance(self.end_date, date):
             if self.end_date < self.start_date:
                 errors['end_date'] = 'End date must be on or after the start date.'
             elif (self.end_date - self.start_date).days >= 42:
                 errors['end_date'] = 'A meeting request can cover at most 42 days.'
+        if not isinstance(self.selected_dates, list):
+            errors['selected_dates'] = 'Provide a list of meeting dates.'
+        elif self.selected_dates:
+            try:
+                dates = sorted(set(self.candidate_dates()))
+            except (TypeError, ValueError):
+                errors['selected_dates'] = 'Enter valid meeting dates in YYYY-MM-DD format.'
+            else:
+                if dates[0] != self.start_date or dates[-1] != self.end_date:
+                    errors['selected_dates'] = 'The first and last selected dates must match the meeting window.'
+                self.selected_dates = [day.isoformat() for day in dates]
         if isinstance(self.start_hour, int) and not 0 <= self.start_hour <= 23:
             errors['start_hour'] = 'Choose a starting hour from 0 to 23.'
         if isinstance(self.end_hour, int) and not 1 <= self.end_hour <= 24:
@@ -614,7 +632,7 @@ class AvailabilityRequest(models.Model):
             previous = type(self).objects.select_for_update().filter(pk=self.pk).first() if self.pk else None
             window_changed = previous and any(
                 getattr(previous, name) != getattr(self, name)
-                for name in ('start_date', 'end_date', 'start_hour', 'end_hour')
+                for name in self.window_fields
             )
             super().save(*args, **kwargs)
             if window_changed:
@@ -654,9 +672,13 @@ class AvailabilityRequest(models.Model):
             tasks = []
             new_tasks = []
             changed_tasks = []
+            if poll.selected_dates:
+                meeting_dates = ', '.join(day.strftime('%b %d') for day in poll.candidate_dates())
+            else:
+                meeting_dates = f'{poll.start_date:%b %d} – {poll.end_date:%b %d}'
             values = {
                 'title': f"WhenBound: {poll.title}",
-                'description': poll.description or f"Submit your availability for {poll.start_date:%b %d} – {poll.end_date:%b %d}.",
+                'description': poll.description or f"Submit your availability for {meeting_dates}.",
                 'scope': Task.Scope.PERSONAL,
                 'source': Task.Source.UNBOUND,
                 'icon': 'fa-calendar-check',

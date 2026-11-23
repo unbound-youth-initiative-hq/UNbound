@@ -1,6 +1,6 @@
 """Validated operations shared by manual availability and Google Calendar sync."""
 
-from datetime import date, timedelta
+from datetime import date
 
 from django.core.exceptions import ValidationError as ModelValidationError
 from django.db import transaction
@@ -40,6 +40,8 @@ def validate_slot(meeting, slot):
         slot_date = None
     if not isinstance(slot_date, date) or not meeting.start_date <= slot_date <= meeting.end_date:
         raise ValidationError({'slots': 'Every slot must be within the request date range.'})
+    if meeting.selected_dates and slot_date.isoformat() not in meeting.selected_dates:
+        raise ValidationError({'slots': 'Every slot must use a selected meeting date.'})
     hour = slot.get('hour')
     if type(hour) is not int or not meeting.start_hour <= hour < meeting.end_hour:
         raise ValidationError({'slots': 'Every slot must be within the request hour range.'})
@@ -63,10 +65,9 @@ def mark_response_draft(meeting, fellow):
 @transaction.atomic
 def submit_availability(fellow, request_id, slots):
     meeting = request_for_fellow(fellow, request_id, lock=True)
-    days = (meeting.end_date - meeting.start_date).days + 1
     expected = {
-        (meeting.start_date + timedelta(days=offset), hour)
-        for offset in range(days)
+        (day, hour)
+        for day in meeting.candidate_dates()
         for hour in range(meeting.start_hour, meeting.end_hour)
     }
     if not isinstance(slots, list) or len(slots) != len(expected):

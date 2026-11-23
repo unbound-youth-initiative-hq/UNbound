@@ -35,6 +35,10 @@ WhiteNoise serves collected static assets. Coordinator-uploaded badge icons are 
 2. Merge the changes into `basic-launch`. The Render web service uses `backend/` as its root. Keep `python manage.py collectstatic --noinput` and `python manage.py migrate --noinput` in the existing build command.
 3. If auto-deploy is off, open **UNbound → Manual Deploy → Deploy latest commit** in Render. After the service reports **Live**, open `/favicon.ico` on the service URL to check the image. A private tab can help if the browser still shows its cached tab icon. [Render deployment controls](https://render.com/docs/deploys)
 
+## Fellow Login loading screen
+
+Deploy the Django update on `basic-launch` before publishing the corresponding public-site update on `main`. Verify that `/readyz` returns `{"ready": true}` with the correct CORS header for `https://unboundyi.org`. The public site checks that endpoint after a fellow opens **Fellow Login** and only shows the loading screen if readiness takes more than 750 ms. After publishing, check a warm visit and a visit following a Render idle period.
+
 ## Fellowship catalog update
 
 Migration `0017_fellowship_catalog` replaces the demo badges with the 12 coordinator-awarded milestones and resets earned badges and XP. Restoring the old awards requires a pre-deployment database backup. It migrates cohort assignments to Launchpad (Orbit of Ideas), Lift-off (Launch Sequence and Mission Build), or Orbit (Trajectory, Touchdown and Graduation). Custom phase names stay available.

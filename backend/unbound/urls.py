@@ -10,6 +10,7 @@ router.register(r'tasks', views.TaskViewSet, basename='task')
 router.register(r'meetings', views.MeetingAvailabilityViewSet, basename='meeting')
 
 urlpatterns = [
+    path('readyz', views.portal_ready, name='portal-ready'),
     path('favicon.ico', RedirectView.as_view(url='/static/favicon-light.png')),
     path('admin/logout/', LogoutView.as_view(next_page='/admin/login/'), name='admin-logout'),
     path('admin/', admin.site.urls),
