@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     notice.addEventListener('focusout', schedule);
     schedule();
   });
-  const { escapeHtml, safeUrl, safeColor, safeIcon, taskIconForeground, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime, adjacentAvailabilitySlot } = window.UNboundUI;
+  const { escapeHtml, safeUrl, safeColor, safeIcon, taskIconForeground, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime, adjacentAvailabilitySlot, availabilityDateBands } = window.UNboundUI;
 
   /* The portal's CSRF secret belongs to its session, independently of Admin. */
   const csrftoken = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -1094,6 +1094,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let availabilitySaveQueue = Promise.resolve();
   let availabilityEditVersion = 0;
   let availabilityLoadedFor = null;
+  let availabilityDayCapacity = 7;
+  let groupAvailability = null;
+  const availabilityGrid = document.getElementById('myAvailabilityGrid');
+  const availabilitySaveStatus = document.getElementById('w2mSaveToast');
 
   window.openWhenBound = function (requestId = null) {
     showView('meetings');
@@ -1168,6 +1172,7 @@ document.addEventListener('DOMContentLoaded', () => {
           renderRequestBanner();
           loadUserAvailabilityGrid();
           loadGroupAvailabilityGrid();
+          resizeAvailabilityCalendars();
         } else {
           activeMeetingRequests = [];
           currentRequestId = null;
@@ -1266,6 +1271,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!gridEl) return;
 
     availabilityLoadedFor = null;
+    availabilitySaveStatus.textContent = '';
+    availabilitySaveStatus.classList.remove('is-error');
     gridEl.textContent = 'Loading your availability…';
     const requestedId = currentRequestId;
     const editVersion = availabilityEditVersion;
@@ -1295,32 +1302,25 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 
-  function renderAvailabilityWeeks(dates, startHour, endHour, renderCell) {
-    const weeks = [];
-    for (const date of dates) {
-      const lastWeek = weeks.at(-1);
-      // A daylight-saving transition can change the row labels midweek.
-      if (!lastWeek || lastWeek.length === 7 || date.hours?.join() !== lastWeek[0].hours?.join()) {
-        weeks.push([date]);
-      } else {
-        lastWeek.push(date);
-      }
-    }
-
-    return weeks.map((week) => {
-      const first = week[0];
-      const last = week[week.length - 1];
+  function renderAvailabilityBands(dates, startHour, endHour, renderCell) {
+    const bands = availabilityDateBands(dates, availabilityDayCapacity);
+    const dayColumns = Math.max(...bands.map(band => band.length));
+    return bands.map(band => {
+      const first = band[0];
+      const last = band.at(-1);
+      const firstDate = `${first.monthName} ${first.dayNum}`;
+      const dateRange = first === last ? firstDate : `${firstDate} – ${last.monthName} ${last.dayNum}`;
       let html = `
-        <div class="availability-week-block">
-          <div class="availability-week-heading">${escapeHtml(first.monthName)} ${escapeHtml(first.dayNum)} – ${escapeHtml(last.monthName)} ${escapeHtml(last.dayNum)}</div>
-          <div class="availability-grid-container" style="grid-template-columns: 76px repeat(${week.length}, minmax(42px, 1fr));">
+        <div class="availability-date-band">
+          <div class="availability-band-heading">${escapeHtml(dateRange)}</div>
+          <div class="availability-grid-container" style="--availability-date-columns: ${dayColumns};">
             <div class="grid-header-cell"></div>
       `;
 
-      week.forEach(date => {
+      band.forEach(date => {
         html += `
-          <div class="grid-header-cell ${date.isToday ? 'today-header' : ''}">
-            <div class="grid-header-day">${escapeHtml(date.dayName)} ${date.isToday ? '•' : ''}</div>
+          <div class="grid-header-cell${date.isToday ? ' today-header" aria-current="date' : ''}">
+            <div class="grid-header-day">${escapeHtml(date.dayName)}${date.isToday ? ' <span aria-hidden="true">•</span>' : ''}</div>
             <div class="grid-header-date">${escapeHtml(date.monthName)} ${escapeHtml(date.dayNum)}</div>
           </div>
         `;
@@ -1329,7 +1329,7 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let hour = startHour; hour < endHour; hour++) {
         const hourLabel = first.hours?.[hour - startHour] || String(hour);
         html += `<div class="grid-time-label">${escapeHtml(hourLabel)}</div>`;
-        week.forEach(date => { html += renderCell(date, hour); });
+        band.forEach(date => { html += renderCell(date, hour); });
       }
 
       html += `</div></div>`;
@@ -1338,14 +1338,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderUserGrid() {
-    const gridEl = document.getElementById('myAvailabilityGrid');
+    const gridEl = availabilityGrid;
     if (!gridEl) return;
 
     const dates = (currentDates && currentDates.length > 0) ? currentDates : getFallbackWeekDayDates();
     const startH = currentStartHour ?? 9;
     const endH = currentEndHour ?? 18;
 
-    gridEl.innerHTML = renderAvailabilityWeeks(dates, startH, endH, (date, hour) => {
+    const activeElement = document.activeElement;
+    const focusedSlot = gridEl.contains(activeElement) && activeElement.matches('[data-slot]');
+    const previousSlot = focusedSlot ? activeElement : gridEl.querySelector('[data-slot][tabindex="0"]');
+    gridEl.innerHTML = renderAvailabilityBands(dates, startH, endH, (date, hour) => {
       const slotKey = date.date ? `${date.date}_${hour}` : `${date.dayOfWeek}_${hour}`;
       const isAvail = !!userSlotsMap[slotKey];
       const day = dates.indexOf(date);
@@ -1358,8 +1361,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 aria-label="${escapeHtml(label)}" aria-pressed="${isAvail}" tabindex="${day === 0 && hour === startH ? 0 : -1}"></button>
       `;
     });
+    if (previousSlot) {
+      const { dayIndex, hour } = previousSlot.dataset;
+      const slot = gridEl.querySelector(`[data-slot][data-day-index="${dayIndex}"][data-hour="${hour}"]`);
+      if (slot) {
+        setSlotTabStop(slot);
+        if (focusedSlot) slot.focus({ preventScroll: true });
+      }
+    }
     loadAvailabilityConflictEvents(dates);
   }
+
+  function resizeAvailabilityCalendars() {
+    const width = availabilityGrid.clientWidth;
+    if (!width || paintingAvailability) return;
+    const sizes = getComputedStyle(availabilityGrid);
+    const timeWidth = parseFloat(sizes.getPropertyValue('--availability-time-width'));
+    const dayWidth = parseFloat(sizes.getPropertyValue('--availability-day-min'));
+    const gap = parseFloat(sizes.getPropertyValue('--availability-column-gap'));
+    const capacity = Math.max(1, Math.min(7, Math.floor((width - timeWidth) / (dayWidth + gap))));
+    if (capacity === availabilityDayCapacity) return;
+    availabilityDayCapacity = capacity;
+    if (currentRequestId && availabilityLoadedFor === currentRequestId) renderUserGrid();
+    if (groupAvailability?.requestId === currentRequestId) {
+      renderGroupGrid(groupAvailability.matrix, groupAvailability.totalMembers);
+    }
+  }
+  new ResizeObserver(resizeAvailabilityCalendars).observe(availabilityGrid);
 
   function getAvailabilityTimezone() {
     return document.getElementById('tzSelect')?.value || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -1483,8 +1511,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const availabilityGrid = document.getElementById('myAvailabilityGrid');
-
   function setSlotTabStop(cell) {
     const previous = availabilityGrid.querySelector('[data-slot][tabindex="0"]');
     if (previous && previous !== cell) previous.tabIndex = -1;
@@ -1542,6 +1568,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!paintingAvailability) return;
     paintingAvailability = false;
     saveUserAvailability();
+    resizeAvailabilityCalendars();
   }
   window.addEventListener('pointerup', finishAvailabilityStroke);
   window.addEventListener('pointercancel', finishAvailabilityStroke);
@@ -1572,8 +1599,8 @@ document.addEventListener('DOMContentLoaded', () => {
       payload.request_id = currentRequestId;
     }
 
-    const toast = document.getElementById('w2mSaveToast');
-    if (toast) { toast.style.display = 'inline-flex'; toast.textContent = 'Saving availability…'; }
+    availabilitySaveStatus.classList.remove('is-error');
+    availabilitySaveStatus.textContent = 'Saving…';
     availabilitySaveQueue = availabilitySaveQueue.catch(() => {}).then(() => fetch('/api/meetings/bulk-save/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
@@ -1584,11 +1611,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currentRequestData) currentRequestData.is_completed = true;
       const statusPill = document.getElementById('w2mStatusPill');
       if (statusPill) { statusPill.textContent = '✓ Submitted'; statusPill.className = 'w2m-status-pill completed'; }
-      if (toast) { toast.style.display = 'inline-flex'; toast.textContent = 'Availability saved. Assignment completed.'; }
+      availabilitySaveStatus.textContent = 'Saved';
       loadGroupAvailabilityGrid();
     }).catch(error => {
       if (savedRequestId !== currentRequestId || savedVersion !== availabilityEditVersion) return;
-      if (toast) { toast.style.display = 'inline-flex'; toast.textContent = `${error.message || 'Unable to save.'} Your changes are still here; select Submit Availability to retry.`; }
+      availabilitySaveStatus.classList.add('is-error');
+      availabilitySaveStatus.textContent = `${error.message || 'Unable to save.'} Select Save to retry.`;
       const statusPill = document.getElementById('w2mStatusPill');
       if (statusPill) { statusPill.textContent = 'Unsaved changes'; statusPill.className = 'w2m-status-pill'; }
     });
@@ -1600,6 +1628,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!gridEl) return;
 
     const requestedId = currentRequestId;
+    if (groupAvailability?.requestId !== requestedId) {
+      groupAvailability = null;
+      gridEl.textContent = 'Loading group availability…';
+    }
     const tz = document.getElementById('tzSelect')?.value || 'America/Monterrey';
     let url = `/api/meetings/group-availability/?timezone=${encodeURIComponent(tz)}`;
     if (currentRequestId) {
@@ -1614,10 +1646,14 @@ document.addEventListener('DOMContentLoaded', () => {
           if (data.start_hour !== undefined) currentStartHour = data.start_hour;
           if (data.end_hour !== undefined) currentEndHour = data.end_hour;
 
+          groupAvailability = { requestId: requestedId, matrix: data.matrix, totalMembers: data.total_members };
           renderGroupGrid(data.matrix, data.total_members);
         }
       }).catch(error => {
-        if (requestedId === currentRequestId) gridEl.textContent = error.message || 'Could not load group availability.';
+        if (requestedId === currentRequestId) {
+          groupAvailability = null;
+          gridEl.textContent = error.message || 'Could not load group availability.';
+        }
       });
   }
 
@@ -1637,7 +1673,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const rawAccent = getComputedStyle(document.body).getPropertyValue('--accent-rgb').trim();
     const accentRgb = /^\d{1,3},\s*\d{1,3},\s*\d{1,3}$/.test(rawAccent) ? rawAccent : '0, 180, 216';
-    gridEl.innerHTML = renderAvailabilityWeeks(dates, startH, endH, (date, hour) => {
+    gridEl.innerHTML = renderAvailabilityBands(dates, startH, endH, (date, hour) => {
       const slotKey = date.date ? `${date.date}_${hour}` : `${date.dayOfWeek}_${hour}`;
       const info = matrixMap[slotKey] || { available_count: 0, available_members: [] };
       const count = Math.max(0, Number(info.available_count) || 0);
