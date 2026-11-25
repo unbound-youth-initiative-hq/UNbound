@@ -487,27 +487,25 @@
             <div class="meeting-col-header">
               <div>
                 <h3 id="myAvailabilityTitle">My Availability</h3>
-                <p class="meeting-col-sub" id="availabilityInstructions">Tap or drag to select. With a keyboard, use the arrow keys to move and Space to select.</p>
+                <p class="meeting-col-sub" id="availabilityInstructions">Tap or drag to select. Use arrow keys to move and Space to select.</p>
                 {% if google_integrations_enabled %}
                 <div class="calendar-conflict-note"><span class="calendar-conflict-swatch"></span> Yellow outline means a Google Calendar conflict</div>
                 <div class="calendar-conflict-status" id="calendarConflictStatus" role="status" aria-live="polite"></div>
                 {% endif %}
               </div>
               <div class="meeting-col-actions">
-                <span class="w2m-save-toast" id="w2mSaveToast" role="status" style="display: none;"></span>
-                <button class="btn btn-sm btn-ghost" id="btnClearMyAvailability" title="Clear all my slots">
+                <button type="button" class="btn btn-sm btn-ghost" id="btnClearMyAvailability" title="Clear all my slots">
                   <i class="fa-solid fa-eraser"></i> Clear
                 </button>
-                <button class="btn btn-sm btn-primary" id="btnSubmitAvailability" title="Save availability and mark task complete">
+                <button type="button" class="btn btn-sm btn-primary" id="btnSubmitAvailability" title="Save availability and mark task complete">
                   <i class="fa-solid fa-check"></i> Save
                 </button>
+                <span class="w2m-save-toast" id="w2mSaveToast" role="status"></span>
               </div>
             </div>
 
-            <div class="grid-table-wrapper">
-              <div class="availability-grid" id="myAvailabilityGrid" role="group" aria-labelledby="myAvailabilityTitle" aria-describedby="availabilityInstructions">
-                <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading availability grid...</div>
-              </div>
+            <div class="availability-grid" id="myAvailabilityGrid" role="group" aria-labelledby="myAvailabilityTitle" aria-describedby="availabilityInstructions">
+              <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading availability grid...</div>
             </div>
           </div>
 
@@ -519,16 +517,14 @@
                 <div class="meeting-col-sub">Darker accent means more of the team is free</div>
               </div>
               <div class="meeting-col-actions">
-                <button class="btn btn-sm btn-ghost" id="btnRefreshGroupAvailability" title="Refresh group heatmap">
+                <button type="button" class="btn btn-sm btn-ghost" id="btnRefreshGroupAvailability" title="Refresh group heatmap" aria-label="Refresh group availability">
                   <i class="fa-solid fa-rotate-right"></i>
                 </button>
               </div>
             </div>
 
-            <div class="grid-table-wrapper">
-              <div class="availability-grid" id="groupAvailabilityGrid">
-                <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading group availability heatmap...</div>
-              </div>
+            <div class="availability-grid" id="groupAvailabilityGrid">
+              <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading group availability heatmap...</div>
             </div>
           </div>
         </div>

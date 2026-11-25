@@ -128,5 +128,30 @@
     };
   }
 
-  return { taskIconForeground, escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime, adjacentAvailabilitySlot };
+  function availabilityDateBands(dates, columnLimit) {
+    const weeks = [];
+    for (const date of dates) {
+      const lastWeek = weeks.at(-1);
+      // A daylight-saving transition can change the row labels midweek.
+      if (!lastWeek || lastWeek.length === 7 || date.hours?.join() !== lastWeek[0].hours?.join()) {
+        weeks.push([date]);
+      } else {
+        lastWeek.push(date);
+      }
+    }
+
+    return weeks.flatMap(week => {
+      const bands = [];
+      let start = 0;
+      // Share the dates evenly across the number of bands that fit.
+      for (let remaining = Math.ceil(week.length / columnLimit); remaining > 0; remaining--) {
+        const end = start + Math.ceil((week.length - start) / remaining);
+        bands.push(week.slice(start, end));
+        start = end;
+      }
+      return bands;
+    });
+  }
+
+  return { taskIconForeground, escapeHtml, safeUrl, safeColor, safeIcon, percentage, recordId, readJsonResponse, taskCardsMarkup, phaseRoadmapMarkup, formatTaskTime, adjacentAvailabilitySlot, availabilityDateBands };
 }));

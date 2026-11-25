@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { taskCardsMarkup, phaseRoadmapMarkup, readJsonResponse, safeUrl, safeColor, safeIcon, percentage, adjacentAvailabilitySlot } = require('../static/dashboard-utils.js');
+const { taskCardsMarkup, phaseRoadmapMarkup, readJsonResponse, safeUrl, safeColor, safeIcon, percentage, adjacentAvailabilitySlot, availabilityDateBands } = require('../static/dashboard-utils.js');
 
 const task = { id: 12, title: 'Prepare notes', description: 'Team work', scope: 'team', status: 'pending', source: 'unbound' };
 
@@ -99,4 +99,25 @@ test('availability arrow keys move by day or hour and stop at the poll bounds', 
   assert.deepEqual(next('Home', 3, 13), { day: 0, hour: 13 });
   assert.equal(next('Tab', 3, 13), null);
   assert.equal(next(' ', 3, 13), null);
+});
+
+test('availability dates wrap evenly and keep their original order', () => {
+  const dates = [1, 3, 5, 7, 8, 10, 11].map(dayNum => ({ dayNum, hours: ['5:00 PM'] }));
+  for (const [limit, expected] of [[7, [7]], [4, [4, 3]], [3, [3, 2, 2]]]) {
+    const bands = availabilityDateBands(dates, limit);
+    assert.deepEqual(bands.map(band => band.length), expected);
+    assert.deepEqual(bands.flat(), dates);
+  }
+  assert.deepEqual(availabilityDateBands(dates.slice(0, 6), 4).map(band => band.length), [3, 3]);
+});
+
+test('wrapped availability separates dates with different local time labels', () => {
+  const dates = Array.from({ length: 8 }, (_, i) => ({
+    dayNum: i + 1,
+    hours: [i < 3 ? '11:30 PM' : '12:30 AM (+1 day)'],
+  }));
+  const bands = availabilityDateBands(dates, 4);
+  assert.deepEqual(bands.map(band => band.length), [3, 3, 2]);
+  assert.deepEqual(bands.flat(), dates);
+  assert.ok(bands.every(band => band.every(date => date.hours[0] === band[0].hours[0])));
 });
